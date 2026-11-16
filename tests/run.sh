@@ -16,7 +16,7 @@ no()  { echo "FAIL $1"; [ -n "${2:-}" ] && printf '%s\n' "$2" | sed 's/^/       
 
 build() { # name, then build_setup.py arguments
   local name=$1; shift
-  python3 "$BUILD" "$KIT" "$TMP/$name" "$@" || echo "build failed: $name"
+  python3 "$BUILD" "$KIT" "$TMP/$name" "$@" 2> "$TMP/$name.err" || no "build from templates: $name" "$(tail -1 "$TMP/$name.err")"
 }
 expect_pass() { # name [verify arguments]
   local name=$1; shift
@@ -77,6 +77,31 @@ echo "## --existing turns size and record problems into warnings"
 expect_pass no-record --existing
 expect_pass bad-size --existing
 expect_fail bad-placeholder "leftover placeholders" --existing
+
+# --- the protect hook ------------------------------------------------------------------
+
+echo "## protect-files.sh blocks protected paths, also in another worktree"
+H="$TMP/hookrepo"; mkdir -p "$H" && cd "$H" && git init -q -b main . && git config user.email a@example.com && git config user.name "Dev One"
+mkdir -p .claude/hooks supabase/migrations lib
+cp "$KIT"/skills/setup/templates/hooks/*.sh .claude/hooks/
+printf 'supabase/migrations/2024*.sql\npubspec.lock\n' > .claude/hooks/protected-paths.txt
+echo 'select 1;' > supabase/migrations/20240101000000_init.sql
+git add -A && git commit -q -m init
+git worktree add -q "$TMP/hook-wt-outside" -b wt-a
+git worktree add -q .claude/worktrees/inside -b wt-b
+hook() { # file path -> exit status of the hook
+  printf '{"tool_input":{"file_path":"%s"}}' "$1" | CLAUDE_PROJECT_DIR="$H" bash "$H/.claude/hooks/protect-files.sh" 2>/dev/null; echo $?
+}
+blocked() { [ "$(hook "$2")" = 2 ] && yes "blocked: $1" || no "should be blocked: $1"; }
+allowed() { [ "$(hook "$2")" = 0 ] && yes "allowed: $1" || no "should be allowed: $1"; }
+blocked "applied migration in the main checkout" "$H/supabase/migrations/20240101000000_init.sql"
+blocked "new file matching a protected glob" "$H/supabase/migrations/20241231000000_new.sql"
+blocked "the same file in a worktree outside the project" "$TMP/hook-wt-outside/supabase/migrations/20240101000000_init.sql"
+blocked "the same file in a worktree inside .claude/" "$H/.claude/worktrees/inside/supabase/migrations/20240101000000_init.sql"
+blocked "protected file at the root" "$H/pubspec.lock"
+allowed "a migration from another year" "$H/supabase/migrations/20260101000000_new.sql"
+allowed "ordinary source file" "$H/lib/main.dart"
+allowed "new file in a folder that does not exist yet" "$H/lib/new/deep/file.dart"
 
 # --- detect.sh on small repositories ---------------------------------------------------
 

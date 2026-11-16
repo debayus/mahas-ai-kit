@@ -52,6 +52,11 @@ def fill(text):
     return re.sub(r'\{\{([A-Z_]+)\}\}', lambda m: VALUES.get(m.group(1), 'stub value'), text)
 
 
+def listing(folder):
+    """Folder entries without hidden files (macOS writes ._name files on some drives)."""
+    return sorted(n for n in os.listdir(folder) if not n.startswith('.'))
+
+
 def write(path, text, executable=False):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, 'w') as f:
@@ -84,15 +89,15 @@ def main():
 
     core = os.path.join(setup, 'templates')
     for kind in ('agents', 'skills', 'commands'):
-        for fn in sorted(os.listdir(os.path.join(core, kind))):
+        for fn in listing(os.path.join(core, kind)):
             name = fn[:-3]
             if lite and name not in LITE[kind]:
                 continue
             take(core, kind, name)
     for mod in sorted(modules):
         mroot = os.path.join(setup, 'modules', mod, 'templates')
-        for kind in sorted(os.listdir(mroot)):
-            for fn in sorted(os.listdir(os.path.join(mroot, kind))):
+        for kind in listing(mroot):
+            for fn in listing(os.path.join(mroot, kind)):
                 # The pr command exists only with the pr option.
                 if fn == 'pr.md' and 'pr' not in keep:
                     continue
@@ -127,7 +132,7 @@ def main():
 
     for path, text in files.items():
         write(os.path.join(a.dest, path), text)
-    for fn in sorted(os.listdir(os.path.join(core, 'hooks'))):
+    for fn in listing(os.path.join(core, 'hooks')):
         if fn.endswith('.json') or (a.no_format and fn == 'format-on-edit.sh'):
             continue
         text = fill(open(os.path.join(core, 'hooks', fn)).read())

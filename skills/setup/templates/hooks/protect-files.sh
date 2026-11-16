@@ -6,7 +6,13 @@ list="$dir/protected-paths.txt"
 [ -f "$list" ] || exit 0
 f="$(bash "$dir/_file-path.sh")"
 [ -n "$f" ] || exit 0
-root="${CLAUDE_PROJECT_DIR:-$(pwd)}"
+# The file may sit in another git worktree of this project, so take the root from the
+# file's own checkout first. A new file has no folder yet: walk up to one that exists.
+d="$(dirname "$f")"
+while [ ! -d "$d" ] && [ "$d" != / ] && [ "$d" != . ]; do d="$(dirname "$d")"; done
+root="$(cd "$d" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null)"
+[ -n "$root" ] && f="$(cd "$d" && pwd -P)${f#"$d"}" && root="$(cd "$root" && pwd -P)"
+[ -n "$root" ] || root="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 rel="${f#"$root"/}"
 while IFS= read -r pat || [ -n "$pat" ]; do
   pat="${pat%$'\r'}"
