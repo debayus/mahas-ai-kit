@@ -84,6 +84,81 @@ sec "Tests"
 for d in test tests __tests__ integration_test e2e spec; do [ -d "$APP/$d" ] && echo "- $APP/$d/ ($(find "$APP/$d" -type f | wc -l | tr -d ' ') files)"; done
 for d in test/helpers test/fakes test/mocks tests/fixtures tests/helpers; do [ -d "$APP/$d" ] && echo "- helpers: $APP/$d/"; done
 
+# Evidence for the testing module: which test levels the repo already has. Counts are files.
+sec "Test levels"
+tg() { grep -rIlE "$1" "$APP" --include='*.dart' --include='*.ts' --include='*.tsx' --include='*.js' --include='*.jsx' --include='*.py' --include='*.go' --exclude-dir=node_modules --exclude-dir=build --exclude-dir=dist --exclude-dir=.dart_tool --exclude-dir=.next --exclude-dir=.venv --exclude-dir=venv --exclude-dir=Pods 2>/dev/null | wc -l | tr -d ' '; }
+cnt() { wc -l | tr -d ' '; }
+ALLT=$(cd "$APP" && ff \( -name '*_test.*' -o -name '*.test.*' -o -name '*.spec.*' -o -name 'test_*.py' \))
+INTEG=$(printf '%s\n' "$ALLT" | grep -cE '(^|/)(integration_test|integration|integration_tests|it)/|[._]integration[._]|_integration_test\.')
+E2EF=$(printf '%s\n' "$ALLT" | grep -cE '(^|/)(e2e|end-to-end|end_to_end|playwright|cypress)/|[._]e2e[._]')
+TOTAL=$(printf '%s\n' "$ALLT" | grep -c .)
+echo "- unit and component: $((TOTAL - INTEG - E2EF)) test files"
+echo "- integration: $INTEG test files"
+GOLD=$(tg 'matchesGoldenFile|toMatchSnapshot|toMatchInlineSnapshot|toMatchImageSnapshot|toHaveScreenshot|assert_match_snapshot')
+GDIR=$(cd "$APP" && find . \( $PRUNE \) -prune -o -type d \( -name goldens -o -name __snapshots__ -o -name '__image_snapshots__' \) -print 2>/dev/null | cnt)
+echo "- golden or snapshot: $GOLD files with assertions, $GDIR reference folders"
+e2e=""
+for f in playwright.config.ts playwright.config.js cypress.config.ts cypress.config.js .detoxrc.js .detoxrc.json wdio.conf.js; do [ -e "$APP/$f" ] && e2e="$e2e $f"; done
+for d in .maestro maestro "$APP/.maestro" "$APP/maestro"; do [ -d "$d" ] && { e2e="$e2e $d/"; break; }; done
+[ -f "$APP/pubspec.yaml" ] && grep -qE '^\s+patrol:' "$APP/pubspec.yaml" && e2e="$e2e patrol"
+[ -d "$APP/integration_test" ] && e2e="$e2e integration_test/(device)"
+echo "- end-to-end: $E2EF test files; tools:${e2e:- none}"
+LOADF=$( { cd "$APP" && ff \( -name 'locustfile*.py' -o -name '*.jmx' -o -name '*.k6.js' -o -name 'artillery*.y*ml' \); } | cnt)
+LOADK=$(tg "from ['\"]k6(/|['\"])|from locust import|import locust")
+ldir=""; for d in load loadtest load-test load_tests k6 perf performance stress; do [ -d "$APP/$d" ] && ldir="$ldir $d/"; done
+lcli=""; for c in k6 locust artillery jmeter; do command -v "$c" >/dev/null 2>&1 && lcli="$lcli $c"; done
+echo "- load or stress: $((LOADF + LOADK)) script files; folders:${ldir:- none}; CLIs installed:${lcli:- none}"
+cov=""
+for f in .nycrc .nycrc.json .coveragerc codecov.yml .codecov.yml coverage/lcov.info lcov.info; do [ -e "$APP/$f" ] && cov="$cov $f"; done
+for f in "$APP/package.json" "$APP"/jest.config.* "$APP"/vitest.config.* "$APP/pyproject.toml" "$APP/pubspec.yaml"; do
+  [ -f "$f" ] && grep -qE 'coverageThreshold|"coverage"|--coverage|pytest-cov|fail_under|@vitest/coverage|thresholds' "$f" && cov="$cov $(basename "$f")(coverage settings)"
+done
+ls .github/workflows/*.y*ml >/dev/null 2>&1 && grep -lE -- '--coverage|lcov|codecov|coverage report' .github/workflows/*.y*ml >/dev/null 2>&1 && cov="$cov CI"
+echo "- coverage signals:${cov:- none}"
+
+# Evidence for the database module. Names, counts, and paths only — never a connection string value.
+sec "Database"
+DBN=0
+dbl() { echo "- $*"; DBN=$((DBN+1)); }
+mig() { # label dir pattern
+  [ -d "$2" ] || return 0
+  n=$(find "$2" -type f -name "$3" 2>/dev/null | wc -l | tr -d ' ')
+  [ "$n" -gt 0 ] && dbl "$1: $2/ ($n files, latest: $(find "$2" -type f -name "$3" 2>/dev/null | sort | tail -1 | sed 's|.*/||' | cut -c1-70))"
+}
+for r in . "$APP"; do
+  mig "supabase migrations" "$r/supabase/migrations" '*.sql'
+  [ -f "$r/supabase/config.toml" ] && dbl "supabase config: $r/supabase/config.toml"
+  for f in firestore.rules firestore.indexes.json database.rules.json storage.rules; do [ -f "$r/$f" ] && dbl "firebase file: $r/$f"; done
+  if [ -f "$r/prisma/schema.prisma" ]; then dbl "prisma schema: $r/prisma/schema.prisma ($(grep -m1 -E '^\s*provider\s*=' "$r/prisma/schema.prisma" | grep -v prisma-client | tr -d ' ' | cut -c1-40))"; fi
+  mig "prisma migrations" "$r/prisma/migrations" 'migration.sql'
+  for f in drizzle.config.ts drizzle.config.js knexfile.js knexfile.ts ormconfig.json alembic.ini flyway.conf liquibase.properties; do [ -f "$r/$f" ] && dbl "migration tool config: $r/$f"; done
+  for d in drizzle migrations db/migrate db/migration db/migrations database/migrations alembic/versions src/migrations Migrations sql; do
+    mig "migrations folder" "$r/$d" '*.sql'; mig "migrations folder" "$r/$d" '*.py'; mig "migrations folder" "$r/$d" '*.cs'; mig "migrations folder" "$r/$d" '*.ts'; mig "migrations folder" "$r/$d" '*.rb'; mig "migrations folder" "$r/$d" '*.php'
+  done
+  [ "$APP" = . ] && break
+done
+DJ=$(cd "$APP" && ff -path '*/migrations/0*.py' | wc -l | tr -d ' '); [ "$DJ" -gt 0 ] && dbl "django-style migrations: $DJ files"
+EF=$(cd "$APP" && ff -name '*.csproj' | xargs grep -lE 'EntityFrameworkCore|Microsoft\.Data\.SqlClient|System\.Data\.SqlClient|Npgsql|Dapper' 2>/dev/null | head -3 | tr '\n' ' '); [ -n "$EF" ] && dbl ".NET data access in: $EF"
+CS=$(cd "$APP" && ff \( -name 'appsettings*.json' -o -name 'web.config' -o -name 'Web.config' \) | xargs grep -liE 'ConnectionStrings|<connectionStrings' 2>/dev/null | head -4 | tr '\n' ' '); [ -n "$CS" ] && dbl "connection strings declared in (values not read): $CS"
+drv=""
+for m in "$APP/pubspec.yaml" "$APP/package.json" "$APP/pyproject.toml" "$APP/requirements.txt" "$APP/go.mod" "$APP/Cargo.toml" "$APP/composer.json" "$APP/Gemfile"; do
+  [ -f "$m" ] && drv="$drv $(grep -oE '(supabase_flutter|@supabase/supabase-js|supabase|cloud_firestore|firebase_database|firebase-admin|firebase|sqflite|drift|isar|hive|objectbox|realm|"pg"|postgres|psycopg[0-9]?|asyncpg|pgx|"mssql"|tedious|pyodbc|pymssql|go-mssqldb|mysql2?|pymysql|mongoose|mongodb|pymongo|redis|sqlalchemy|typeorm|sequelize|drizzle-orm|@prisma/client|knex|gorm|sqlx|diesel|better-sqlite3|sqlite3)' "$m" | tr -d '"' | sort -u | tr '\n' ' ')"
+done
+drv=$(echo $drv | tr ' ' '\n' | sort -u | tr '\n' ' ')
+[ -n "${drv// /}" ] && dbl "data libraries in manifests: $drv"
+for e in .env.example .env.sample .env.template "$APP/.env.example" "$APP/.env.sample"; do
+  [ "$APP" = . ] && case "$e" in ./*) continue ;; esac
+  [ -f "$e" ] && { v=$(grep -oE '^[A-Z0-9_]*(DATABASE|DB_|SUPABASE|POSTGRES|PG|MSSQL|SQLSERVER|MYSQL|MONGO|FIREBASE|REDIS)[A-Z0-9_]*' "$e" | sort -u | head -10 | tr '\n' ' '); [ -n "$v" ] && dbl "env variable names in $e: $v"; }
+done
+if [ -f .mcp.json ] && command -v python3 >/dev/null 2>&1; then
+  ms=$(python3 -c 'import json,re;print(", ".join(k for k in json.load(open(".mcp.json")).get("mcpServers",{}) if re.search("supabase|postgres|firebase|firestore|sql|mongo|db|database",k,re.I)))' 2>/dev/null)
+  [ -n "$ms" ] && dbl "database servers in .mcp.json: $ms"
+fi
+dcli=""; for c in supabase firebase psql sqlcmd mysql mongosh az; do command -v "$c" >/dev/null 2>&1 && dcli="$dcli $c"; done
+echo "- database CLIs installed:${dcli:- none}"
+[ -f .claude/hooks/protected-paths.txt ] && echo "- protected paths already listed: $(grep -cvE '^\s*(#|$)' .claude/hooks/protected-paths.txt)"
+[ "$DBN" -eq 0 ] && echo "- no database evidence found"
+
 sec "Env and secret files (names only)"
 for d in . "$APP"; do
   ls -a "$d" 2>/dev/null | grep -E '^\.env|key\.properties|service-account|adminsdk|\.jks$|\.keystore$' | sed "s|^|- $d/|"

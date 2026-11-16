@@ -62,6 +62,7 @@ Stack skills: at most 3 (4 in full tier). A skill exists only if at least two ag
 | `{{EDGE_CASES}}` | The edge cases this product always has (roles, offline, old versions, empty state…) |
 | `{{INVARIANTS_CHECK}}` | One line listing the invariants the reviewer must verify |
 | `{{ANALYZE_CMD}}` `{{FORMAT_CHECK_CMD}}` `{{FORMAT_FILE_CMD}}` `{{TEST_CMD}}` `{{E2E_CMD}}` | Verified commands; delete the line if the project has none |
+| `{{TEST_GUIDE}}` | "Load the `stack-testing` skill" when that skill is generated; otherwise "Read [testing.md](.claude/.agent/testing.md)", or the conventions doc in tier lite |
 | `{{LAYER_FILE_MAP}}` | The real layer order with real paths, for the design template |
 | `{{DATA_SECTION}}` | Migration + data-flow checklist, or delete the section if no persistent data |
 | `{{APP_DIR}}` | The scan's primary app root (`.` when it is the repository root). When it is a subfolder, every command in CLAUDE.md, agents, and skills is written to run from there |
@@ -76,9 +77,11 @@ Stack skills: at most 3 (4 in full tier). A skill exists only if at least two ag
 
 ## Modules (the user chooses)
 
-Optional parts live in `modules/`; read `modules/README.md` for the format. Each module asks one question with a recommended answer taken from the scan. Current modules: `git-flow` (direct, branch, or pull request) and `ticket` (Trello, Jira, GitHub Issues, or none). Tier lite skips `git-flow` unless the user asks for it.
+Optional parts live in `modules/`; read `modules/README.md` for the format. Each module asks one question with a recommended answer taken from the scan. Current modules: `git-flow` (direct, branch, or pull request), `ticket` (Trello, Jira, GitHub Issues, or none), `testing` (gate only, gaps in existing levels, or extended levels), and `database` (files only, or also read-only inspection of a live database). Tier lite skips `git-flow` unless the user asks for it.
 
-At most 9 skills in total (stack + process + module skills). Over the cap → drop a stack skill and fold its rules into the deep docs.
+A module agent counts as an operations agent for the size limit (80 lines).
+
+At most 10 skills in total (stack + process + module skills). Over the cap → drop a stack skill and fold its rules into the deep docs.
 
 ## Kit record
 
@@ -91,7 +94,7 @@ Write `.claude/kit.json` last. It is the only record of what the kit generated; 
   "commit": "<short sha>",
   "tier": "lite | standard | full",
   "appDir": ".",
-  "modules": { "git-flow": "branch", "ticket": "trello" },
+  "modules": { "git-flow": "branch", "ticket": "trello", "testing": "existing", "database": "files" },
   "ops": ["playstore-deploy", "appstore-deploy", "crash"]
 }
 ```

@@ -1,6 +1,6 @@
 # Modules
 
-A module is one optional part of the setup that the user chooses. Each module asks one question, has a recommended answer derived from the scan, and generates at most one skill and one command.
+A module is one optional part of the setup that the user chooses. Each module asks one question, has a recommended answer derived from the scan, and generates at most one skill, one agent, and one command.
 
 ```
 modules/<name>/
@@ -25,7 +25,7 @@ A template may hold text for several options:
 <!-- /option -->
 ```
 
-Keep the block of the chosen option, delete the other blocks, and delete every marker line. A block may name several options: `<!-- option: branch pr -->`. `verify.sh` fails on a leftover marker.
+Keep the block of the chosen option, delete the other blocks, and delete every marker line. A block may name several options: `<!-- option: branch pr -->`. A module may also key blocks by a named part instead of an option (the testing module keys them by test level); its `module.md` says which blocks to keep. `verify.sh` fails on a leftover marker.
 
 ## Rules for every module
 
@@ -41,3 +41,5 @@ Keep the block of the chosen option, delete the other blocks, and delete every m
 |---|---|
 | [git-flow](git-flow/module.md) | How finished work reaches the default branch: direct, branch, or pull request |
 | [ticket](ticket/module.md) | Which tracker holds the work items, and how ticket codes appear in branches and commits |
+| [database](database/module.md) | How Claude may work with the server-side database: from files only, or also reading a live one; protects applied migrations |
+| [testing](testing/module.md) | How far testing goes beyond the gate: which levels get a gap-finding agent, and whether coverage has a floor |

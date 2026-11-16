@@ -48,9 +48,9 @@ else bad ".claude/kit.json missing or has no \"kit\" version"; fi
 mark=$(grep -rnE '<!-- /?option' CLAUDE.md .claude --include='*.md' 2>/dev/null)
 [ -z "$mark" ] && ok "no leftover option markers" || { bad "leftover option markers:"; echo "$mark" | head -10; }
 ns=$(ls -d .claude/skills/*/ 2>/dev/null | wc -l | tr -d ' ')
-if [ "$ns" -le 9 ]; then ok "$ns skills in total"
-elif [ "$EXISTING" -eq 1 ]; then warn "$ns skills in total (kit cap 9)"
-else bad "$ns skills in total (max 9)"; fi
+if [ "$ns" -le 10 ]; then ok "$ns skills in total"
+elif [ "$EXISTING" -eq 1 ]; then warn "$ns skills in total (kit cap 10)"
+else bad "$ns skills in total (max 10)"; fi
 
 # 3. JSON validity
 for f in .claude/settings.json .claude/kit.json .mcp.json; do [ -f "$f" ] || continue

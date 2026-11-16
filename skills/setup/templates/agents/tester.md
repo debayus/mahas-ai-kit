@@ -23,7 +23,7 @@ Stages, in order — each must pass before the next:
 
 ## Project rules while fixing
 
-- Load the `stack-testing` skill before writing or repairing tests.
+- {{TEST_GUIDE}} before writing or repairing tests.
 {{HOT_RULES}}
 - Never change git history and never discard working-tree changes.
 
