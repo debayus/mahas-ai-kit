@@ -1,0 +1,14 @@
+{
+  "name": "mahas-ai-kit",
+  "version": "0.1.0",
+  "description": "One setup command: analyzes the project code, then generates a complete but lean Claude configuration (CLAUDE.md, docs, skills, pipeline agents, commands, hooks) tailored to that code.",
+  "author": {
+    "name": "Mahasdev"
+  },
+  "keywords": [
+    "setup",
+    "pipeline",
+    "flutter",
+    "code-review"
+  ]
+}

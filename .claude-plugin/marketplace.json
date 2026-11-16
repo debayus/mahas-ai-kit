@@ -1,0 +1,13 @@
+{
+  "name": "mahas",
+  "owner": {
+    "name": "Mahasdev"
+  },
+  "plugins": [
+    {
+      "name": "mahas-ai-kit",
+      "source": "./",
+      "description": "Per-project Claude setup generated from an analysis of the code."
+    }
+  ]
+}
