@@ -1,7 +1,7 @@
 ---
 name: setup
 description: Analyzes the current repository, then generates a complete but lean Claude configuration tailored to the code — CLAUDE.md, deep docs, stack skills, the Planner→Architect→Developer→Tester→Reviewer pipeline, commands, and hooks. Use when the user says "set up this project", "set up Claude for this repo", "install the kit", "prepare the pipeline", "/setup", or starts work in a repo that has no .claude/ folder. Also handles "update the setup" (update mode).
-argument-hint: "[--lite | --full] [--update] [--dry-run]"
+argument-hint: "[--lite | --full] [--update] [--add <module>] [--dry-run]"
 ---
 
 # Project setup
@@ -23,6 +23,8 @@ Paths below are relative to this skill's folder: `${CLAUDE_PLUGIN_ROOT}/skills/s
 
 Run `bash <skill folder>/scripts/detect.sh` from the target repository root and read its report. Do not explore the repo by hand before this.
 
+If the report's "App root" is a subfolder, the app does not live at the repository root: run analyze, test, and build commands from that folder, and write every generated command so it runs from there. `.claude/` and `CLAUDE.md` still go at the repository root.
+
 If the report shows an existing `.claude/` with agents or skills, switch to **update mode** (Step 6) unless the user asked for a fresh setup.
 
 ## Step 2 — Targeted reading
@@ -36,9 +38,18 @@ Pick the tier using `references/generation-rules.md` (`--lite` / `--full` overri
 - What you found (stack, architecture in one or two sentences, test and CI status).
 - The project's hard rules you inferred, each with the file that proves it.
 - The list of files you will create, and what you are deliberately leaving out and why.
+- The recommended option for each module, and the operations pieces the evidence supports (deploy, crash triage), each with its evidence.
 - Tooling changes you propose (stricter analyzer settings, hooks) with their measured impact.
 
-Ask for confirmation with AskUserQuestion. Also ask, only if the code cannot answer: the ticket tracker to use for leftover findings (skip the ticket skill if none), and the language for commit messages. With `--dry-run`, stop after this step.
+### Choices
+
+For each module in `modules/` (see `modules/README.md`), apply its recommendation rules to the scan and note the recommended option with its evidence line. Do the same for each operations piece the evidence supports. Then ask with AskUserQuestion:
+
+1. First question: "Follow all recommendations" (list them in the description: tier, each module's option, each operations piece) or "Choose one by one".
+2. Only if the user chooses one by one: one question per module, recommended option first, then one multi-select question for the operations pieces. Deploy pieces publish to a store when used, so they are never pre-selected without the user seeing them named.
+3. Then the follow-up questions the chosen options need and the code cannot answer (each `module.md` lists them), the language for commit messages if the history is mixed, and where release credentials live if the default paths do not exist.
+
+Keep it to as few questions as the choices allow; never ask what the scan already answered. With `--dry-run`, stop after this step.
 
 ## Step 4 — Generate
 
@@ -49,10 +60,11 @@ Order:
 1. `.claude/.agent/` deep docs (see generation rules for which files).
 2. `CLAUDE.md` from `templates/docs/CLAUDE.md`.
 3. Stack skills (`.claude/skills/stack-*/SKILL.md`) shaped like `templates/skills/stack-skill.md`.
-4. Process skills, agents, commands, and the workflow — only those in the chosen tier. A skill template `templates/skills/<name>.md` is written to `.claude/skills/<name>/SKILL.md`.
-5. Hooks: copy the scripts to `.claude/hooks/`, make them executable, remove formatter branches for languages the repo does not use, and merge `templates/hooks/settings-hooks.json` into `.claude/settings.json` (merge, do not replace).
-6. Tooling changes the user approved. For stricter analyzer or linter settings: apply, re-run the analyzer, and compare with the baseline. If new findings appear, report the count and ask whether to keep, fix, or revert — do not silently leave the project failing.
-7. `.claude/README.md` — a short map of what was generated.
+4. Process skills, agents, commands, and the workflow — only those in the chosen tier, plus the operations pieces the user accepted. A skill template `templates/skills/<name>.md` is written to `.claude/skills/<name>/SKILL.md`.
+5. Module files for the options the user chose, from `modules/<name>/templates/`, resolving option blocks as `modules/README.md` describes. A module set to `none`: delete the lines in generated commands that refer to its skill.
+6. Hooks: copy the scripts to `.claude/hooks/`, make them executable, remove formatter branches for languages the repo does not use, and merge `templates/hooks/settings-hooks.json` into `.claude/settings.json` (merge, do not replace).
+7. Tooling changes the user approved. For stricter analyzer or linter settings: apply, re-run the analyzer, and compare with the baseline. If new findings appear, report the count and ask whether to keep, fix, or revert — do not silently leave the project failing.
+8. `.claude/README.md` — a short map of what was generated — and `.claude/kit.json`, the kit record described in the generation rules.
 
 ## Step 5 — Verify, then report
 
@@ -62,4 +74,20 @@ Report to the user: tier chosen, files created, what was skipped and why, toolin
 
 ## Step 6 — Update mode
 
-For a repo that already has a setup: run Steps 1–2, then compare. Report (a) docs that no longer match the code, (b) kit templates newer than the project's copies, (c) rules in docs that a hook or lint could now enforce. Propose each change as a diff and apply only what the user approves. Never delete project-specific rules.
+For a repo that already has a setup. Run Steps 1–2, then `bash <skill folder>/scripts/verify.sh --existing` (size overruns are warnings in this mode, not failures).
+
+**Setup with a kit record (`.claude/kit.json`).** Compare and report: (a) docs that no longer match the code, (b) kit templates newer than the recorded version, (c) rules in docs that a hook or lint could now enforce, (d) operations pieces and modules the evidence now supports but the record lacks — not those recorded as `none`.
+
+**Setup without a kit record (made by hand or by an older kit) — adopt it, do not replace it.**
+
+1. Map what exists by what it does, not by its name. A command that runs plan → design → code → test → review is the pipeline whatever it is called (`/engineer`, `/ship`, `/feature`); an agent that runs the gate and fixes failures is the tester (`test-fixer`, `test-runner`); a skill holding commit rules is git delivery (`git-delivery`, `commit-prep`). Show the user this mapping.
+2. Keep existing names and files. Never rename, merge, or delete them, and never add a kit piece that duplicates one that already does the job.
+3. Propose only what is missing after the mapping: hooks, deep docs, an operations piece, a noise-rule section for the reviewer.
+4. An oversized `CLAUDE.md` or agent: propose moving whole sections, unchanged, into `.claude/.agent/*.md` and leaving a link in their place. Show the diff. Nothing is dropped, only moved.
+5. Write `.claude/kit.json` only after the user has accepted at least one change, recording the mapped pieces under the option they correspond to, so the next update has a baseline.
+
+In both cases propose each change as a diff and apply only what the user approves. Never delete project-specific rules.
+
+## Adding a module later (`--add <module>`)
+
+Run the scan, read `modules/<module>/module.md`, ask its question, generate its files, and update `.claude/kit.json`. If the choice changes facts another module wrote (a ticket code in the branch rule, a `/pr` step in `/pipeline`), show that diff too. Then run `verify.sh`.
