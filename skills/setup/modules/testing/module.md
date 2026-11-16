@@ -23,8 +23,8 @@ Apply the first rule that matches and quote its evidence line in the question:
 
 "How far should testing go beyond the gate?" — options in recommended order. Then ask only what the choice needs:
 
-- `extended`: one multi-select of the levels the repo lacks (integration, golden or snapshot, end-to-end, load or stress). Offer a level only if its tool is in the manifest or installed, or the user names the tool.
-- Coverage floor, only when a coverage command ran in Step 2: "Keep coverage from dropping below today's figure (N%)?" Default no.
+- `extended`: one multi-select of the levels the repo lacks (unit and component, integration, golden or snapshot, end-to-end, load or stress). Unit and component is always offerable: use the stack's standard runner, or ask which one if the stack has several. Offer another level only if its tool is in the manifest, or the user names the tool. A CLI that is merely installed on the machine does not make a level offerable.
+- Coverage floor. CI already enforces one (a `--min`, `fail_under`, or threshold in the scan's CI lines) → write that figure and its source as the floor and do not ask. Otherwise ask only when the repo defines a coverage command and you ran it in Step 2: "Keep coverage from dropping below today's figure (N%)?" Default no. Do not run a coverage command just to be able to ask.
 - Load or stress chosen: which non-production host may be tested. No such host → record "none; scripts are written but not run".
 
 ## A level counts as present when
@@ -32,10 +32,12 @@ Apply the first rule that matches and quote its evidence line in the question:
 | Level | Evidence in the scan |
 |---|---|
 | Unit and component | At least one test file outside the integration and end-to-end folders |
-| Integration | Integration test files, or an `integration_test/` folder |
+| Integration | Integration test files that run without a device or browser |
 | Golden or snapshot | Files with golden or snapshot assertions |
-| End-to-end | End-to-end test files or a tool config (Playwright, Cypress, Patrol, Maestro, Detox) |
+| End-to-end | End-to-end test files or a tool config (Playwright, Cypress, Patrol, Maestro, Detox). Flutter's `integration_test/` runs on a device: list it here, not under integration |
 | Load or stress | Script files for k6, Locust, Artillery, or JMeter |
+
+Performance or benchmark tests the repo already has are not a level here: leave them alone unless load or stress is chosen.
 
 ## Placeholders
 

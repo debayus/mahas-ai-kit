@@ -25,11 +25,15 @@ Run `bash <skill folder>/scripts/detect.sh` from the target repository root and 
 
 If the report's "App root" is a subfolder, the app does not live at the repository root: run analyze, test, and build commands from that folder, and write every generated command so it runs from there. `.claude/` and `CLAUDE.md` still go at the repository root.
 
-If the report shows an existing `.claude/` with agents or skills, switch to **update mode** (Step 6) unless the user asked for a fresh setup.
+If the report shows an existing `.claude/` with agents, skills, or commands, switch to **update mode** (Step 6) unless the user asked for a fresh setup. A `.claude/` that holds only other files (settings, a launch file) is a fresh setup: keep those files.
 
 ## Step 2 — Targeted reading
 
 Follow `references/analysis.md`. Read only what it lists for the detected stack, and stop when its questions are answered. Run the analyze and test commands once to confirm they work and to record a baseline (pass/fail, counts, duration). A command that fails here must not be written into CLAUDE.md as if it worked.
+
+- No analyze or test command defined by the repo: use the toolchain's own check if the config for it exists (`tsc --noEmit` with a `tsconfig.json`, `go vet`, `cargo check`) and say it was inferred. Do not run a build that writes output as a baseline; record it as unverified.
+- A test suite that would run longer than about 5 minutes, or that needs a device, a browser, or a server: run one small test file to prove the command works, and record the full suite as "not run during setup".
+- Dependencies not installed: do not install them. Record the commands as unverified.
 
 ## Step 3 — Choose the tier and show the plan
 
@@ -46,10 +50,10 @@ Pick the tier using `references/generation-rules.md` (`--lite` / `--full` overri
 For each module in `modules/` (see `modules/README.md`), apply its recommendation rules to the scan and note the recommended option with its evidence line. Do the same for each operations piece the evidence supports. Then ask with AskUserQuestion:
 
 1. First question: "Follow all recommendations" (list them in the description: tier, each module's option, each operations piece) or "Choose one by one".
-2. Only if the user chooses one by one: one question per module, recommended option first, then one multi-select question for the operations pieces. Deploy pieces publish to a store when used, so they are never pre-selected without the user seeing them named.
+2. Only if the user chooses one by one: one question per module, recommended option first, then one multi-select question for the operations pieces. No operations piece has evidence → skip that question and say so in the plan. A module whose `module.md` says "do not ask" is skipped the same way. Deploy pieces publish to a store when used, so they are never pre-selected without the user seeing them named.
 3. Then the follow-up questions the chosen options need and the code cannot answer (each `module.md` lists them), the language for commit messages if the history is mixed, and where release credentials live if the default paths do not exist.
 
-Keep it to as few questions as the choices allow; never ask what the scan already answered. With `--dry-run`, stop after this step.
+Keep it to as few questions as the choices allow; never ask what the scan already answered. With `--dry-run`, stop after this step: show the plan and the questions with their recommended answers, ask nothing, and write nothing.
 
 ## Step 4 — Generate
 
@@ -74,7 +78,7 @@ Report to the user: tier chosen, files created, what was skipped and why, toolin
 
 ## Step 6 — Update mode
 
-For a repo that already has a setup. Run Steps 1–2, then `bash <skill folder>/scripts/verify.sh --existing` (size overruns are warnings in this mode, not failures).
+For a repo that already has a setup. Run Steps 1–2, then `bash <skill folder>/scripts/verify.sh --existing` (size overruns are warnings in this mode, not failures). In Step 2, read the existing deep docs first and the code only where a doc is missing or the scan contradicts it. With `--dry-run`, show the mapping, the findings, and the proposals below as a list, then stop before any diff.
 
 **Setup with a kit record (`.claude/kit.json`).** Compare and report: (a) docs that no longer match the code, (b) kit templates newer than the recorded version, (c) rules in docs that a hook or lint could now enforce, (d) operations pieces and modules the evidence now supports but the record lacks — not those recorded as `none`.
 
@@ -82,9 +86,13 @@ For a repo that already has a setup. Run Steps 1–2, then `bash <skill folder>/
 
 1. Map what exists by what it does, not by its name. A command that runs plan → design → code → test → review is the pipeline whatever it is called (`/engineer`, `/ship`, `/feature`); an agent that runs the gate and fixes failures is the tester (`test-fixer`, `test-runner`); a skill holding commit rules is git delivery (`git-delivery`, `commit-prep`). Show the user this mapping.
 2. Keep existing names and files. Never rename, merge, or delete them, and never add a kit piece that duplicates one that already does the job.
-3. Propose only what is missing after the mapping: hooks, deep docs, an operations piece, a noise-rule section for the reviewer.
+3. Propose only what is missing after the mapping: hooks, deep docs, a noise-rule section for the reviewer, and each module or operations piece whose evidence is there and that nothing existing covers. Use the module's own recommendation rules. The "Follow all recommendations" question lists only these additions, never a piece that is already covered.
+   - Partly covered (an existing skill does half of what the kit's piece does): do not add the kit's file beside it. Offer to add the missing sections to the existing file, as a diff, or leave it.
+   - Two existing pieces share one kit role (a gate agent and a full-suite agent): keep both and map both.
+   - Also report docs that no longer match the code, and rules a hook could now enforce, as in the kit-record case.
 4. An oversized `CLAUDE.md` or agent: propose moving whole sections, unchanged, into `.claude/.agent/*.md` and leaving a link in their place. Show the diff. Nothing is dropped, only moved.
-5. Write `.claude/kit.json` only after the user has accepted at least one change, recording the mapped pieces under the option they correspond to, so the next update has a baseline.
+5. Write `.claude/kit.json` when the user has accepted at least one change, or has declined them all and agrees to keep the record. Record chosen options under `modules`, declined ones as `"none"`, and every mapped piece under `adopted` (see the generation rules), so the next update does not repeat the same offers.
+6. After applying changes, run `verify.sh --existing` again.
 
 In both cases propose each change as a diff and apply only what the user approves. Never delete project-specific rules.
 

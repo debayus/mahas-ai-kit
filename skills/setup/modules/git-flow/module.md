@@ -1,6 +1,6 @@
 # Module: git-flow
 
-Decides how finished work reaches the default branch. Tier lite skips this module (it has no `/pipeline`) unless the user asks for it.
+Decides how finished work reaches the default branch. In tier lite this module is not asked, not listed under "Follow all recommendations", and not recorded, because lite has no `/pipeline`. If the user asks for it in lite, apply the rules below.
 
 ## Options
 
@@ -16,10 +16,12 @@ Decides how finished work reaches the default branch. Tier lite skips this modul
 
 Apply the first rule that matches and quote its evidence line in the question:
 
-1. PR merges in the last 200 commits ≥ 3, or a pull request template exists → `pr`.
-2. More than one commit author in the last 200 commits, and the remote host has a PR CLI installed → `pr`.
-3. Prefixed branches exist (for example `fix/`, `feat/`), or more than one author → `branch`.
+1. At least 3 `Merge pull request #N` commits in the last 200, or a pull request template exists → `pr`. Subjects ending in `(#N)` count as pull requests only when the Tickets section shows no ticket codes; otherwise they are ticket numbers.
+2. At least 3 local branch merges in the last 200, or prefixed branches exist (for example `fix/`, `feat/`) → `branch`. What the history shows wins over what the team size suggests.
+3. More than one human author, and the remote host has a PR CLI installed → `pr`.
 4. Otherwise → `branch` for tier standard and full, `direct` for tier lite.
+
+Automated authors (Claude, bots) do not count as authors. If a push to the default branch deploys to production (see the CI lines in the scan), say so in the question whatever the recommendation is.
 
 ## Question
 
@@ -43,6 +45,8 @@ Ask a follow-up only when the code cannot answer it:
 | `{{PR_TEMPLATE}}` | Path of the repo's pull request template, or delete the line |
 
 ## Rules
+
+- A user who declines the module is recorded as `"none"` in `kit.json`; nothing is generated and `/pipeline` step 3 keeps a plain commit instruction.
 
 - Never record a standing permission to merge or push that the user did not give in this setup session.
 - `/pipeline` step 3 points at `process-git-delivery`; with option `pr` its last step offers `/pr` instead of a push command.

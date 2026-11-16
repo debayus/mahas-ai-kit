@@ -69,9 +69,10 @@ done
 for f in .claude/hooks/*.sh; do [ -e "$f" ] || continue
   [ -x "$f" ] && bash -n "$f" 2>/dev/null && ok "$f executable, syntax ok" || bad "$f not executable or has a syntax error"
 done
-if ls .claude/hooks/*.sh >/dev/null 2>&1; then
-  grep -q 'format-on-edit.sh' .claude/settings.json 2>/dev/null && ok "format hook wired in settings.json" || bad "hooks exist but are not wired in .claude/settings.json"
-fi
+for f in .claude/hooks/*.sh; do [ -e "$f" ] || continue
+  h=$(basename "$f"); case "$h" in _*) continue ;; esac   # _*.sh are helpers sourced by the hooks
+  grep -q "$h" .claude/settings.json 2>/dev/null && ok "$h wired in settings.json" || bad "$h exists but is not wired in .claude/settings.json"
+done
 
 # 6. relative Markdown links resolve
 broken=0

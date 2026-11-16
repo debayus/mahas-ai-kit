@@ -16,9 +16,12 @@ Engines: `supabase` and `firebase` have been checked against real repos by the s
 
 Apply the first rule that matches and quote its evidence line in the question:
 
-1. "no database evidence found", or only on-device libraries → `none`. Do not ask.
+1. "no database evidence found", or only on-device libraries, or Firebase without a "used in code" line (hosting, messaging, analytics only) → `none`. Do not ask.
 2. A database server is listed in `.mcp.json`, or the engine's CLI is installed and the repo has its config (for example `supabase/config.toml` with the `supabase` CLI) → `read`.
 3. Migration files, rules files, or a schema file exist → `files`.
+4. Otherwise (a server-side database is used in code, but the repo holds no migration, rules, or schema file) → `none`, and still ask. Say in the plan that access rules live outside the repo and cannot be checked from it.
+
+For rule 2, "its config" means a database config: `supabase/config.toml`, or a `firebase.json` that has a `firestore` or `database` entry. A hosting-only `firebase.json` does not count, and a CLI on the machine is not evidence on its own.
 
 ## Question
 
@@ -35,7 +38,9 @@ Apply the first rule that matches and quote its evidence line in the question:
 | `firebase` | `firestore.rules`, `database.rules.json`, or `firestore.indexes.json` |
 | `sql` | A migrations folder, a Prisma or Drizzle schema, Alembic, Django-style migrations, EF Core, or connection strings declared in a config file |
 
-A repo may have more than one (Supabase for data and Firebase for push only): keep a block only for an engine that stores application data. Firebase used only for messaging, analytics, or crash reports is not a database here.
+A repo may have more than one. Keep a block for each engine that stores application data, name them all in the one question, and apply the one chosen option to all of them; `kit.json` records the option once. Firebase used only for messaging, analytics, or crash reports is not a database here, and `storage.rules` alone is not database evidence.
+
+Firestore or Realtime Database used in code without a rules file in the repo: the engine is `firebase`, with `{{DB_ACCESS_RULES}}` written as "rules are not in this repository".
 
 ## Placeholders
 

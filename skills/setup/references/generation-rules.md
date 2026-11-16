@@ -4,11 +4,11 @@
 
 | Tier | When | What is generated |
 |---|---|---|
-| **lite** | Under ~40 source files, or no automated tests | `CLAUDE.md`, `.agent/overview.md` + `conventions.md`, one stack skill, `reviewer` agent, `process-code-review`, `/plan` (planner only), `/review-changes`, format hook |
+| **lite** | Under ~40 source files, or no automated tests | `CLAUDE.md`, `.agent/overview.md` + `conventions.md`, one stack skill, `planner` and `reviewer` agents, `process-planning`, `process-code-review`, `/plan` (planner only), `/review-changes`, format hook if the repo has a formatter |
 | **standard** | 40–300 source files with tests | lite + `architecture.md`, `testing.md`, `glossary.md` if needed, up to 3 stack skills, all 5 agents, `process-planning`, `process-tech-design`, `/pipeline`, `/plan`, `/test`, workflow, both hooks |
 | **full** | Over ~300 source files, or persistent data with migrations/sync, or multiple roles/tenants | standard + `data-model.md`, a data stack skill, `workflows.md` (release/ops runbooks found in the repo) |
 
-Add a piece from a higher tier when the code clearly needs it; drop a piece when it does not apply. State each such decision in the plan.
+Size and tests decide the tier first: a small repo or one without tests is lite even if it has shared data or several roles. Then add single pieces from a higher tier when the code clearly needs them (a data section, a second stack skill), and drop a piece that does not apply. State each such decision in the plan.
 
 ## Operations pieces (any tier, evidence only)
 
@@ -39,7 +39,7 @@ Rules for these pieces:
 | Command | 30 lines |
 | `.agent/*.md` | As long as needed, but no section without a file reference |
 
-Stack skills: at most 3 (4 in full tier). A skill exists only if at least two agents need it.
+Stack skills: at most 3 (4 in full tier). A skill exists only if at least two agents need it; the single stack skill of tier lite is exempt.
 
 ## Writing rules
 
@@ -61,7 +61,12 @@ Stack skills: at most 3 (4 in full tier). A skill exists only if at least two ag
 | `{{PROJECT_RISKS}}` | The structural risks specific to this code (for planner/reviewer) |
 | `{{EDGE_CASES}}` | The edge cases this product always has (roles, offline, old versions, empty state…) |
 | `{{INVARIANTS_CHECK}}` | One line listing the invariants the reviewer must verify |
-| `{{ANALYZE_CMD}}` `{{FORMAT_CHECK_CMD}}` `{{FORMAT_FILE_CMD}}` `{{TEST_CMD}}` `{{E2E_CMD}}` | Verified commands; delete the line if the project has none |
+| `{{ANALYZE_CMD}}` `{{FORMAT_CHECK_CMD}}` `{{FORMAT_FILE_CMD}}` `{{TEST_CMD}}` `{{E2E_CMD}}` | Verified commands. A project that lacks one of them: remove that command from the sentence and keep the rest; delete the line only when none is left |
+| `{{RUN_COMMANDS}}` `{{COMMANDS}}` | The run, build, and check commands that worked in Step 2, one per line |
+| `{{VERSION_AND_RELEASE_NOTE}}` | Where the version lives and how a release is made, in one line; delete the line if the repo shows neither |
+| `{{DOC_INDEX_ROWS}}` | One row per generated deep doc: file, what it covers, when to read it |
+| `{{DATE}}` `{{COMMIT}}` | Today's date and the short SHA from the scan |
+| `{{TOPIC}}` `{{TOPIC_TITLE}}` `{{WHAT_IT_COVERS}}` `{{WHEN_TO_LOAD}}` `{{DOC}}` `{{KEY_FILE}}` `{{RULE}}` `{{REASON}}` `{{PROOF_FILE}}` `{{STEP}}` `{{WHAT}}` | Stack skill slots, explained in `templates/skills/stack-skill.md` itself |
 | `{{TEST_GUIDE}}` | "Load the `stack-testing` skill" when that skill is generated; otherwise "Read [testing.md](.claude/.agent/testing.md)", or the conventions doc in tier lite |
 | `{{LAYER_FILE_MAP}}` | The real layer order with real paths, for the design template |
 | `{{DATA_SECTION}}` | Migration + data-flow checklist, or delete the section if no persistent data |
@@ -73,7 +78,7 @@ Stack skills: at most 3 (4 in full tier). A skill exists only if at least two ag
 | `{{ANDROID_GRADLE_FILE}}` `{{ANDROID_KEY_PROPERTIES}}` `{{ANDROID_BUILD_CMD}}` `{{AAB_PATH}}` `{{PLAY_KEY_PATH}}` | Android release facts from the scan. Default key path `~/.playstore/service-account.json`; confirm it with the user |
 | `{{BUNDLE_ID}}` `{{IOS_BUILD_CMD}}` `{{IPA_PATH}}` `{{ASC_KEY_DIR}}` `{{ASC_ISSUER_FILE}}` | iOS release facts from the scan. Defaults `~/.appstoreconnect/private_keys` and `~/.appstoreconnect/issuer_id.txt`; confirm them with the user |
 | `{{CRASH_SOURCES}}` `{{BACKEND_ERROR_SOURCES}}` | Where crash reports are read (project and app identifiers, the tools to use, where reporting is wired in the code and what it filters). Backend log and advisor sources, or delete the line |
-| `{{MODEL_PLANNER}}` `{{MODEL_DESIGN}}` `{{MODEL_BUILD}}` `{{MODEL_REVIEW}}` | Default `fable`, `opus`, `sonnet`, `opus`. In lite tier use `sonnet` for build and `opus` for review only |
+| `{{MODEL_PLANNER}}` `{{MODEL_DESIGN}}` `{{MODEL_BUILD}}` `{{MODEL_REVIEW}}` | Default `fable`, `opus`, `sonnet`, `opus`. Tier lite has only the planner and the reviewer and uses the same defaults for them |
 
 ## Modules (the user chooses)
 
@@ -95,15 +100,18 @@ Write `.claude/kit.json` last. It is the only record of what the kit generated; 
   "tier": "lite | standard | full",
   "appDir": ".",
   "modules": { "git-flow": "branch", "ticket": "trello", "testing": "existing", "database": "files" },
-  "ops": ["playstore-deploy", "appstore-deploy", "crash"]
+  "ops": ["playstore-deploy", "appstore-deploy", "crash"],
+  "adopted": { "crash": ".claude/agents/crash-analyzer.md", "ticket": ".claude/skills/process-ticket-offer" }
 }
 ```
+
+`adopted` appears only for a setup the kit did not generate (update mode): it maps a kit role, module, or operations piece to the existing file that already does the job, so later runs do not offer it again. For such a setup, `tier` is the tier the scan suggests and `kit` is the version of the kit that wrote the record.
 
 A module the user declined is recorded as `"none"`, so update mode does not offer it again unasked.
 
 ## Tooling proposals (offer, never force)
 
-- **Formatter hook** — always, when the stack has a formatter.
+- **Formatter hook** — when the repo itself has a formatter: one that ships with the toolchain (`dart format`, `gofmt`, `cargo fmt`) or one listed in the manifest (Prettier, Ruff, Black). No formatter in the repo → no hook; do not add a formatter dependency.
 - **Protected paths hook** — when the repo has files that must not be hand-edited: applied migration files, generated code, lockfiles, secret files. List them in `.claude/hooks/protected-paths.txt`.
-- **Stricter static analysis** — Dart: `strict-casts`, `strict-inference`, `strict-raw-types`, lint `unawaited_futures`. TypeScript: `strict`, `noUncheckedIndexedAccess`. Python: enable the type checker already in the repo. Measure new findings before and after; report the count.
+- **Stricter static analysis** — Dart: `strict-casts`, `strict-inference`, `strict-raw-types`, lint `unawaited_futures`. TypeScript: `strict`, `noUncheckedIndexedAccess`. Python: enable the type checker already in the repo. Measure new findings before and after; report the count. With `--dry-run`, or when measuring means editing a config file, offer the change as unmeasured instead. Do not recommend a setting that adds more than about 50 findings in one step; report the count and leave it to the user.
 - **Rules that became enforceable** — if a hot rule can be a lint or a hook, propose that and shorten the prose.
