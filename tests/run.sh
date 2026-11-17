@@ -104,6 +104,12 @@ printf '%s\n' "$out" | grep -q "MCP server 'trello' are named" && yes "an MCP se
 
 printf '%s\n' "$out" | grep -q "MCP server 'my_server' are named" && yes "an MCP server name with an underscore is recognised" || no "an MCP server name with an underscore is recognised" "$(printf '%s\n' "$out" | grep -i mcp)"
 
+bad long-lines; python3 -c "import sys; open(sys.argv[1],'a').write('x'*20000+chr(10))" "$TMP/long-lines/.claude/commands/plan.md"
+expect_fail long-lines "very long lines"
+bad no-hot-heading; sed -i.bak 's/^## Hot rules.*$/## Constraints/' "$TMP/no-hot-heading/CLAUDE.md"; rm -f "$TMP/no-hot-heading/CLAUDE.md.bak"
+expect_fail no-hot-heading "no '## Hot rules' section"
+expect_pass no-hot-heading --existing
+
 echo "## --existing turns size and record problems into warnings"
 expect_pass no-record --existing
 expect_pass bad-size --existing
@@ -310,7 +316,12 @@ cat > package.json <<'EOF'
 EOF
 mkdir -p tools src "my app" prisma && echo 'echo release' > tools/release.sh && echo "export const a = 1" > "src/it's.ts"
 printf 'generator client {\n  provider = "prisma-client-js"\n}\ndatasource db {\n  provider = "postgresql"\n}\n' > prisma/schema.prisma
-echo 'A=1' > .env.production; echo 'A=' > .env.example; echo '/.env' > .gitignore
+echo 'A=1' > .env.production; echo 'A=' > .env.example; echo 'A=1' > .env; echo '/.env' > .gitignore
+echo '{}' > app-firebase-adminsdk-abc.json
+mkdir -p test/ci db/tests .claude/skills/real .claude/skills/broken
+echo "void main() { expectMatchesTextGolden('a'); }" > test/ci/two_device_e2e_static_test.dart
+echo 'select 1;' > db/tests/rls_test.sql
+printf -- '---\nname: real\ndescription: x\n---\n' > .claude/skills/real/SKILL.md
 git add -A && commit "feat: tool"
 OUT=$(scan)
 hasnt "a token in a package.json script is not printed" "tok_abc123"
@@ -318,7 +329,13 @@ hasnt "a token passed as a flag is not printed" "sntrys_abc123"
 has "the script itself is still listed" "VERCEL_TOKEN=<redacted> vercel deploy" "deploy"
 has "a tracked .env.production is flagged" ".env.production" "TRACKED"
 hasnt "a tracked .env.example is not flagged" "TRACKED IN GIT (values not read; ask the user whether this is intended): .env.example"
-has "/.env in .gitignore counts as ignored" ".env ignored by git: yes" "ignored"
+has "/.env in .gitignore counts as ignored" "- .env ignored by git: yes" "ignored"
+has "each env file is reported on its own" "- .env.production ignored by git: NO" "ignored"
+has "a tracked admin SDK key file is flagged" "app-firebase-adminsdk-abc.json" "TRACKED"
+has "\"e2e\" inside a longer test name is not end-to-end" "- end-to-end: 0 test files" "end-to-end"
+has "a project's own golden helper is counted" "- golden or snapshot: 1 files" "golden"
+has "SQL test files are reported" "- SQL test files: 1" "SQL"
+has "a skills entry without SKILL.md is not listed as a skill" "without a SKILL.md (not skills; a broken link?): broken" "skills"
 has "a release script in tools/ is listed" "- script: tools/release.sh" "script"
 has "a file name with an apostrophe does not empty the list" "it's.ts" "Largest"
 has "the Prisma provider is read from the datasource block" "postgresql" "prisma"

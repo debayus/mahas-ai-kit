@@ -57,7 +57,7 @@ Firestore or Realtime Database used in code without a rules file in the repo: th
 
 ## Protected paths
 
-Add to `.claude/hooks/protected-paths.txt` one glob per folder of applied migrations, written so that existing files are blocked and a new file can still be created. The hook also blocks creating a file that matches, so a glob must never match a name a new migration could get. Timestamped names → one glob per past year (`supabase/migrations/2024*.sql`) and one per past month of the current year (`supabase/migrations/202601*.sql`). Numbered names → list the existing files one by one. Say in the plan that migrations from the current month stay editable until `--update` adds their glob.
+Add to `.claude/hooks/protected-paths.txt` one glob per folder of applied migrations, written so that existing files are blocked and a new file can still be created. The hook also blocks creating a file that matches, so a glob must never match a name a new migration could get. Timestamped names → one glob per past year (`supabase/migrations/2024*.sql`) and one per past month of the current year (`supabase/migrations/202601*.sql`). Numbered names → list the existing files one by one. Say in the plan that migrations from the current month stay editable until `--update` adds their glob. If the repo itself records which of them are applied (a doc, a ledger file, the CLI's own list read from files), list those files one by one as well.
 
 Do not protect rules files (`firestore.rules`) or a schema file (`schema.prisma`): they are edited in place.
 

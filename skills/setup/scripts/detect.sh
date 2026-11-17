@@ -112,14 +112,16 @@ sec "Test levels"
 tg() { grep -rIlE "$1" "$APP" --include='*.dart' --include='*.ts' --include='*.tsx' --include='*.js' --include='*.jsx' --include='*.py' --include='*.go' --exclude-dir=node_modules --exclude-dir=build --exclude-dir=dist --exclude-dir=.dart_tool --exclude-dir=.next --exclude-dir=.venv --exclude-dir=venv --exclude-dir=Pods 2>/dev/null | wc -l | tr -d ' '; }
 cnt() { wc -l | tr -d ' '; }
 ALLT=$(cd "$APP" && ff \( -name '*_test.*' -o -name '*.test.*' -o -name '*.spec.*' -o -name 'test_*.py' -o -name 'test_*.gd' \) | grep -E "$TEXT")
-E2EP='(^|/)(e2e[^/]*|end-to-end|end_to_end|playwright|cypress|integration_test)/|[._]e2e[._]'
+E2EP='(^|/)(e2e[^/]*|end-to-end|end_to_end|playwright|cypress|integration_test)/|\.e2e\.|_e2e_test\.|_e2e\.(test|spec)\.'
 E2EF=$(printf '%s\n' "$ALLT" | grep -cE "$E2EP")
 INTEG=$(printf '%s\n' "$ALLT" | grep -vE "$E2EP" | grep -cE '(^|/)(integration|integration_tests|it)/|[._]integration[._]|_integration_test\.')
 TOTAL=$(printf '%s\n' "$ALLT" | grep -c .)
 byext=$(printf '%s\n' "$ALLT" | grep -vE "$E2EP" | grep -vE '(^|/)(integration|integration_tests|it)/|[._]integration[._]|_integration_test\.' | grep . | sed 's/.*\.//' | sort | uniq -c | sort -rn | awk '{printf "%s %s, ", $2, $1}' | sed 's/, $//')
 echo "- unit and component: $((TOTAL - INTEG - E2EF)) test files${byext:+ (by extension: $byext — more than one language means more than one runner)}"
 echo "- integration: $INTEG test files"
-GOLD=$(tg 'matchesGoldenFile|toMatchSnapshot|toMatchInlineSnapshot|toMatchImageSnapshot|toHaveScreenshot|assert_match_snapshot')
+SQLT=$(cd "$APP" && ff \( -path '*/tests/*.sql' -o -path '*/test/*.sql' \) | wc -l | tr -d ' ')
+[ "$SQLT" -gt 0 ] && echo "- SQL test files: $SQLT (database tests; not counted in the levels above, and they need a database to run)"
+GOLD=$(tg 'matchesGoldenFile|[A-Za-z]+Golden[A-Za-z]*\(|toMatchSnapshot|toMatchInlineSnapshot|toMatchImageSnapshot|toHaveScreenshot|assert_match_snapshot')
 GDIR=$(cd "$APP" && find . \( $PRUNE \) -prune -o -type d \( -name goldens -o -name __snapshots__ -o -name '__image_snapshots__' \) -print 2>/dev/null | cnt)
 echo "- golden or snapshot: $GOLD files with assertions, $GDIR reference folders"
 e2e=""
@@ -180,7 +182,7 @@ for e in .env.example .env.sample .env.template "$APP/.env.example" "$APP/.env.s
 done
 if [ -f .mcp.json ] && command -v python3 >/dev/null 2>&1; then
   ms=$(python3 -c 'import json,re;print(", ".join(k for k in json.load(open(".mcp.json")).get("mcpServers",{}) if re.search("supabase|postgres|firebase|firestore|sql|mongo|db|database",k,re.I)))' 2>/dev/null)
-  [ -n "$ms" ] && dbl "database servers in .mcp.json: $ms"
+  [ -n "$ms" ] && dbl "servers in .mcp.json that may reach a database: $ms (a firebase server counts only when Firestore or Realtime Database is used in code)"
 fi
 dcli=""; for c in supabase firebase psql sqlcmd mysql mongosh az; do command -v "$c" >/dev/null 2>&1 && dcli="$dcli $c"; done
 echo "- database CLIs on this machine (not repo evidence):${dcli:- none}"
@@ -192,9 +194,18 @@ for d in . "$APP"; do
   ls -a "$d" 2>/dev/null | grep -E '^\.env|key\.properties|service-account|adminsdk|\.jks$|\.keystore$' | sed "s|^|- $d/|"
   [ "$APP" = . ] && break
 done
-trk=$(git ls-files 2>/dev/null | grep -vE '\.(example|sample|template|dist)$' | grep -E '(^|/)(\.env(\.[A-Za-z0-9_.-]+)?|key\.properties|[^/]*service-account[^/]*\.json|[^/]*\.jks|[^/]*\.keystore)$' | head -5 | tr '\n' ' ')
+trk=$(git ls-files 2>/dev/null | grep -vE '\.(example|sample|template|dist)$' | grep -E '(^|/)(\.env(\.[A-Za-z0-9_.-]+)?|key\.properties|[^/]*service-account[^/]*\.json|[^/]*adminsdk[^/]*\.json|[^/]*\.jks|[^/]*\.keystore)$' | head -5 | tr '\n' ' ')
 [ -n "$trk" ] && echo "- TRACKED IN GIT (values not read; ask the user whether this is intended): $trk"
-[ "$GIT" -eq 1 ] && { git check-ignore -q --no-index .env 2>/dev/null && echo "- .env ignored by git: yes" || echo "- .env ignored by git: NO (check with the user before assuming this is a mistake)"; }
+if [ "$GIT" -eq 1 ]; then
+  envs=$(ls -a 2>/dev/null | grep -E '^\.env' | grep -vE '\.(example|sample|template|dist)$')
+  [ -n "$envs" ] || envs=.env
+  printf '%s\n' "$envs" | while IFS= read -r e; do
+    [ -e "$e" ] && what="$e" || what="$e (no such file yet)"
+    git check-ignore -q --no-index "$e" 2>/dev/null && echo "- $what ignored by git: yes" || echo "- $what ignored by git: NO (check with the user before assuming this is a mistake)"
+  done
+  rules=$(grep -hE '^[^#]*\.env' .gitignore 2>/dev/null | head -4 | tr '\n' ' ')
+  [ -n "$rules" ] && echo "- .gitignore rules that name env files: $rules"
+fi
 
 sec "Invariant markers in code (count)"
 N=$(grep -rIiE '(^|[^A-Za-z])(NEVER|JANGAN|WAJIB|DO NOT|MUST NOT|HACK|WORKAROUND)([^A-Za-z]|$)' --exclude-dir=dist --include='*.dart' --include='*.ts' --include='*.tsx' --include='*.js' --include='*.jsx' --include='*.py' --include='*.go' --include='*.rs' --include='*.kt' --include='*.swift' --include='*.php' --include='*.gd' --include='*.cs' --include='*.java' --exclude='*.min.js' --exclude='._*' --exclude-dir=addons --exclude-dir=.venv --exclude-dir=venv --exclude-dir=.godot --exclude-dir=__pycache__ --exclude-dir=vendor --exclude-dir=target --exclude-dir=node_modules --exclude-dir=build --exclude-dir=.dart_tool --exclude-dir=.claude . 2>/dev/null | wc -l | tr -d ' ')
@@ -239,7 +250,15 @@ OPS=$(ops)
 sec "Existing Claude setup"
 for f in CLAUDE.md AGENTS.md .mcp.json; do [ -e "$f" ] && echo "- $f ($(wc -l < "$f" | tr -d ' ') lines)"; done
 if [ -d .claude ]; then
-  for d in agents skills commands workflows hooks .agent; do [ -d ".claude/$d" ] && echo "- .claude/$d/: $(ls ".claude/$d" | tr '\n' ' ')"; done
+  for d in agents commands workflows hooks .agent; do [ -d ".claude/$d" ] && echo "- .claude/$d/: $(ls ".claude/$d" | tr '\n' ' ')"; done
+  if [ -d .claude/skills ]; then
+    sk=""; nosk=""
+    for s in .claude/skills/*; do [ -e "$s" ] || continue
+      if [ -f "$s/SKILL.md" ]; then sk="$sk$(basename "$s") "; else nosk="$nosk$(basename "$s") "; fi
+    done
+    echo "- .claude/skills/: $sk"
+    [ -n "$nosk" ] && echo "- entries in .claude/skills/ without a SKILL.md (not skills; a broken link?): $nosk"
+  fi
   [ -f .claude/settings.json ] && { grep -q '"hooks"' .claude/settings.json && echo "- settings.json: has hooks" || echo "- settings.json: no hooks"; }
   oth=$(ls -A .claude | grep -vE '^(agents|skills|commands|workflows|hooks|\.agent|kit\.json|\.DS_Store|\._.*)$' | tr '\n' ' '); [ -n "$oth" ] && echo "- other entries in .claude/: $oth"
   if [ -f .claude/kit.json ]; then echo "- kit record: $(tr -d '\n' < .claude/kit.json | cut -c1-300)"

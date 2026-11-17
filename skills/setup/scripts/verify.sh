@@ -14,9 +14,13 @@ soft() { if [ "$EXISTING" -eq 1 ]; then warn "$*"; else bad "$*"; fi; }
 limit() { # file max
   [ -f "$1" ] || return 0
   n=$(wc -l < "$1" | tr -d ' ')
-  if [ "$n" -le "$2" ]; then ok "$1 ($n lines)"
-  elif [ "$EXISTING" -eq 1 ]; then warn "$1 has $n lines (kit limit $2) — propose moving sections into .claude/.agent/"
-  else bad "$1 has $n lines (limit $2)"; fi
+  # A line limit means little when lines are very long: also look at the size (300 bytes a line).
+  kb=$(( $(wc -c < "$1" | tr -d ' ') / 1024 )); big=""
+  [ "$kb" -gt $(( $2 * 300 / 1024 )) ] && big=", $kb KB (very long lines: judge it by size)"
+  if [ "$n" -le "$2" ] && [ -z "$big" ]; then ok "$1 ($n lines)"
+  elif [ "$n" -le "$2" ]; then soft "$1 has $n lines$big"
+  elif [ "$EXISTING" -eq 1 ]; then warn "$1 has $n lines (kit limit $2)$big — propose moving sections into the deep docs"
+  else bad "$1 has $n lines (limit $2)$big"; fi
 }
 
 if [ -f CLAUDE.md ]; then limit CLAUDE.md 40; else bad "CLAUDE.md missing"; fi
@@ -29,7 +33,8 @@ SCOPE="CLAUDE.md .claude/README.md .claude/kit.json .claude/settings.json .claud
 if [ -f CLAUDE.md ]; then
   hot=$(awk '/^## /{on=0} tolower($0) ~ /^## hot rules/{on=1; next} on && /^([0-9]+\.|[-*]) /' CLAUDE.md)
   nh=$(printf '%s\n' "$hot" | grep -c .)
-  if [ "$nh" -le 6 ]; then ok "$nh hot rules"; else soft "$nh hot rules in CLAUDE.md (max 6) — move the rest into a stack skill or .claude/.agent/"; fi
+  if ! grep -qiE '^## hot rules' CLAUDE.md; then soft "CLAUDE.md has no '## Hot rules' section, so its rules cannot be counted — find them under their own heading"
+  elif [ "$nh" -le 6 ]; then ok "$nh hot rules"; else soft "$nh hot rules in CLAUDE.md (max 6) — move the rest into a stack skill or .claude/.agent/"; fi
   nl=$(printf '%s\n' "$hot" | grep . | grep -vc '](')
   [ "$nl" -eq 0 ] || soft "$nl hot rule(s) in CLAUDE.md without a link to the file that proves them"
 fi

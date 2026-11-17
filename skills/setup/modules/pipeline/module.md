@@ -19,7 +19,7 @@ Apply the first rule that matches and quote its evidence in the question:
 
 1. The scan lists a workflow framework folder (`.specify/`, `.bmad-core/`, `_bmad/`, `openspec/`) → `none`.
 2. This session lists skills of a workflow framework (names that start with `superpowers:`, `speckit`, or `bmad`) → `none`. The scan cannot see user-level plugins, so check the skill list yourself.
-3. Otherwise → `kit`. Do not ask; say in the plan that `--no-pipeline` gives the knowledge layer only.
+3. Otherwise → `kit` (fresh setup; in update mode an existing pipeline is mapped and recorded as `own` instead). Do not ask; say in the plan that `--no-pipeline` gives the knowledge layer only.
 
 `--no-pipeline` on the command line selects `none` without asking.
 
