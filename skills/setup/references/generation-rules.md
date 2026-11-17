@@ -4,11 +4,28 @@
 
 | Tier | When | What is generated |
 |---|---|---|
-| **lite** | Under ~40 source files, or no automated tests | `CLAUDE.md`, `.agent/overview.md` + `conventions.md`, one stack skill, `planner` and `reviewer` agents, `process-planning`, `process-code-review`, `/plan` (planner only), `/review-changes`, format hook if the repo has a formatter |
+| **lite** | Under ~40 source files, or no automated tests | `CLAUDE.md`, `.agent/README.md` + `overview.md` + `conventions.md`, one stack skill, `planner` and `reviewer` agents, `process-planning`, `process-code-review`, `/plan` (planner only), `/review-changes`, the format hook if the repo has a formatter, the protect hook if the repo has files to protect |
 | **standard** | 40–300 source files with tests | lite + `architecture.md`, `testing.md`, `glossary.md` if needed, up to 3 stack skills, all 5 agents, `process-planning`, `process-tech-design`, `/pipeline`, `/plan`, `/test`, workflow, both hooks |
 | **full** | Over ~300 source files, or persistent data with migrations/sync, or multiple roles/tenants | standard + `data-model.md`, a data stack skill, `workflows.md` (release/ops runbooks found in the repo) |
 
 Size and tests decide the tier first: a small repo or one without tests is lite even if it has shared data or several roles. Then add single pieces from a higher tier when the code clearly needs them (a data section, a second stack skill), and drop a piece that does not apply. State each such decision in the plan.
+
+A repo without tests: in the copied process skills, drop the sentences that require tests ("Include test tasks", "tests green") and name the gates that do exist instead. Tier lite has no pipeline: drop the sentences that refer to one.
+
+## Deep docs
+
+No template: each doc is written from what Step 2 found, one section per item below, every section with a link to the file that proves it. Leave out an item the code does not show.
+
+| Doc | Contents |
+|---|---|
+| `README.md` | The index, from `templates/docs/agent-README.md`. Generated in every tier |
+| `overview.md` | What the product is and who uses it, the stack with versions, the top-level folder map, how to run it, how it is deployed |
+| `conventions.md` | File and symbol naming, the shape of a feature folder, where strings, colors, and constants live. Tier lite also puts here what would otherwise go in `testing.md` and `data-model.md` |
+| `architecture.md` | The layers with real paths, one feature traced end to end, state management, the choke points every write goes through |
+| `testing.md` | Test folders, helpers and fakes, how the database and network are faked, the commands, known flaky patterns. The testing module adds its "Test levels" section here |
+| `glossary.md` | Domain and non-English terms a newcomer would misread |
+| `data-model.md` | Tables or collections and their relations, the migration mechanism, sync, who may read what |
+| `workflows.md` | Release and operations runbooks found in the repo |
 
 ## Operations pieces (any tier, evidence only)
 
@@ -26,6 +43,7 @@ Rules for these pieces:
 - Deploy commands cannot be test-run during setup. Mark them "unverified" in `.claude/README.md` until the first real deploy.
 - Credentials are referred to by path only. Ask the user where they live if the default path does not exist; never read or print their content.
 - Crash SDK present but no way to read reports → do not generate the piece; name the missing connection in the report.
+- A deploy that CI performs on its own (the scan's "deploy in CI" line: hosting, pages, a store upload action) gets no piece. Name it in `{{VERSION_AND_RELEASE_NOTE}}` and, if a push to the default branch triggers it, as a hot rule.
 
 ## Size limits (hard)
 
@@ -66,6 +84,7 @@ Stack skills: at most 3 (4 in full tier). A skill exists only if at least two ag
 | `{{VERSION_AND_RELEASE_NOTE}}` | Where the version lives and how a release is made, in one line; delete the line if the repo shows neither |
 | `{{DOC_INDEX_ROWS}}` | One row per generated deep doc: file, what it covers, when to read it |
 | `{{DATE}}` `{{COMMIT}}` | Today's date and the short SHA from the scan |
+| `{{KIT_VERSION}}` `{{TIER}}` `{{SETUP_MAP}}` `{{CHOICES}}` `{{UNVERIFIED}}` | For `.claude/README.md`: the kit version and tier as in `kit.json`; one line per generated folder saying what is in it; each module option and operations piece chosen or declined; every command or piece marked "unverified", or "Nothing" |
 | `{{TOPIC}}` `{{TOPIC_TITLE}}` `{{WHAT_IT_COVERS}}` `{{WHEN_TO_LOAD}}` `{{DOC}}` `{{KEY_FILE}}` `{{RULE}}` `{{REASON}}` `{{PROOF_FILE}}` `{{STEP}}` `{{WHAT}}` | Stack skill slots, explained in `templates/skills/stack-skill.md` itself |
 | `{{TEST_GUIDE}}` | "Load the `stack-testing` skill" when that skill is generated; otherwise "Read [testing.md](.claude/.agent/testing.md)", or the conventions doc in tier lite |
 | `{{LAYER_FILE_MAP}}` | The real layer order with real paths, for the design template |
@@ -105,7 +124,7 @@ Write `.claude/kit.json` last. It is the only record of what the kit generated; 
 }
 ```
 
-`adopted` appears only for a setup the kit did not generate (update mode): it maps a kit role, module, or operations piece to the existing file that already does the job, so later runs do not offer it again. For such a setup, `tier` is the tier the scan suggests and `kit` is the version of the kit that wrote the record.
+`adopted` appears only for a setup the kit did not generate (update mode): it maps a kit role, module, or operations piece to the existing file that already does the job, so later runs do not offer it again. Keys: an agent role (`planner`, `architect`, `developer`, `tester`, `reviewer`), a command (`pipeline`, `plan`, `test`, `review-changes`), `workflow`, a module name, or an operations piece name. The value is one path, or a list of paths when two files share the role. An adopted module is also recorded under `modules` with the option that describes what the existing file does, and an adopted operations piece is also listed in `ops`; declining an extension to it does not change that. For such a setup, `tier` is the tier the scan suggests and `kit` is the version of the kit that wrote the record.
 
 A module the user declined is recorded as `"none"`, so update mode does not offer it again unasked.
 

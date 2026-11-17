@@ -21,7 +21,10 @@ $ARGUMENTS
 1. Cross-check every acceptance criterion against the final `git diff` yourself. If one looks unmet, treat it as not approved and say so.
 2. Confirm the tester report is green and quote its summary line.
 3. Commit following the `process-git-delivery` skill.
-4. Do not push or merge on your own. Tell the user the next delivery step the skill defines (in a pull-request flow: `/pr`).
+4. Do not push or merge on your own. Tell the user the next delivery step the skill defines.
+<!-- option: pr -->
+   Here that step is `/pr`.
+<!-- /option -->
 5. If the `process-ticket` skill exists, follow it for leftover findings.
 
 **`NOT_APPROVED` or `BLOCKED_TESTS_RED`:** do not commit. Report the remaining issues or failing tests verbatim and which loop cap was hit, then ask how to proceed (raise the caps, narrow the scope, or take over manually).

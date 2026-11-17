@@ -46,7 +46,7 @@ Performance or benchmark tests the repo already has are not a level here: leave 
 | `{{TEST_LEVELS}}` | One table row per level in scope: level, folder, the command that ran in Step 2 (or "unverified" if it needs a device, a browser, or a server), one existing test file to copy the pattern from. A level picked under `extended` has no pattern file: write "to start" and the tool |
 | `{{TEST_FILE_RULE}}` | How a source file maps to its test file in this repo, read from existing pairs (for example `lib/a/b.dart` → `test/a/b_test.dart`) |
 | `{{GAP_SOURCES}}` | How gaps are found here, in order: the coverage command and its report path if it ran in Step 2; then source files with no test file under the rule above |
-| `{{COVERAGE_FLOOR}}` | The measured figure and the command that produced it. Declined or no coverage command → delete the line |
+| `{{COVERAGE_FLOOR}}` | The figure CI enforces, with the workflow file that sets it; otherwise the figure measured in Step 2 and the command that produced it. Declined or no coverage command → delete the line |
 | `{{LOAD_TARGET}}` | The host the user allowed for load runs, or "none; scripts are written but not run" |
 
 The "Test levels" section in `.claude/.agent/testing.md` is the only home for the table. The agent and the command link to it; they do not repeat it. Tier lite has no `testing.md`: create it with this section only.
@@ -57,6 +57,6 @@ The "Test levels" section in `.claude/.agent/testing.md` is the only home for th
 - `{{TEST_GUIDE}}` and `{{TEST_CMD}}` are the kit-wide placeholders from `references/generation-rules.md`.
 
 - Resolve the option blocks in the templates by level, not by option: keep `<!-- option: golden -->`, `e2e`, `load`, and `coverage` blocks only for the levels in scope and for an accepted coverage floor.
-- A coverage floor is the measured figure, never a target. Do not write a number that no command produced in this session.
+- A coverage floor is a figure CI already enforces or one measured in this session, never a target. Do not write a number that neither a workflow file nor a command in this session produced.
 - Do not add a test tool to the manifest during setup. A level under `extended` whose tool is missing is recorded as "to start"; the agent proposes the dependency on first use and waits for approval.
 - Mark `extended` levels "unverified" in `.claude/README.md` until their first passing run.

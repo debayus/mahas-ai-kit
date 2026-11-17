@@ -16,7 +16,7 @@ Decides which tracker holds the work items and how ticket codes appear in branch
 Apply the first rule that matches and quote its evidence line in the question:
 
 1. A tracker server is listed in `.mcp.json` → that tracker.
-2. Ticket codes appear in at least 5 of the last 200 commit subjects → the tracker their shape points to: `Trello #123` → `trello`; `ABC-123` → `jira`; a bare `#123` with a GitHub remote → `github`.
+2. Ticket codes appear in at least 5 of the last 200 commit subjects → the tracker their shape points to: `Trello #123` → `trello`; `ABC-123` → `jira`; a bare `#123` with a GitHub remote → `github`. Two shapes pass → the more frequent one.
 3. Otherwise → `none`. Still ask, with `none` first.
 
 ## Question
@@ -27,6 +27,8 @@ Apply the first rule that matches and quote its evidence line in the question:
 - The list or status names for: new work, in progress, waiting for review, done.
 
 Read the rest from the tracker when a tool for it is connected (list names, labels) instead of asking.
+
+The scan reads `.mcp.json` only. A tracker can also be connected at user level (a connector on the account, a user-level MCP server, or a user-level skill), which the scan cannot see. Before writing "not connected", look at the tools and skills available in this session for that tracker; if none is visible, ask the user how they reach it.
 
 ## Placeholders
 

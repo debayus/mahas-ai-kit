@@ -2,7 +2,7 @@
 # Deterministic repository scan. Prints a compact report for the setup skill.
 # Read-only. Run from the repository root.
 set -u
-PRUNE='-name .git -o -name .claude -o -name node_modules -o -name build -o -name dist -o -name .dart_tool -o -name Pods -o -name .gradle -o -name vendor -o -name target -o -name .next -o -name coverage -o -name .venv -o -name venv -o -name __pycache__ -o -name .idea -o -name .symlinks -o -name ephemeral'
+PRUNE='-name .git -o -name .claude -o -name node_modules -o -name build -o -name dist -o -name .dart_tool -o -name Pods -o -name .gradle -o -name vendor -o -name target -o -name .next -o -name coverage -o -name .venv -o -name venv -o -name __pycache__ -o -name .idea -o -name .symlinks -o -name ephemeral -o -path ./functions/lib'
 ff() { find . \( $PRUNE \) -prune -o -type f "$@" -print 2>/dev/null; }
 sec() { printf '\n## %s\n' "$1"; }
 CODE_EXT="-name *.dart -o -name *.ts -o -name *.tsx -o -name *.js -o -name *.py -o -name *.go -o -name *.rs -o -name *.kt -o -name *.swift -o -name *.php"
@@ -55,7 +55,7 @@ sec "Top-level folders"
 ls -d */ 2>/dev/null | grep -vE '^(node_modules|dist|build|coverage)/$' | tr '\n' ' '; echo
 
 sec "Largest source files"
-ff \( -name '*.dart' -o -name '*.ts' -o -name '*.tsx' -o -name '*.py' -o -name '*.go' \) | grep -vE '\.g\.dart$|\.freezed\.dart$' | xargs wc -l 2>/dev/null | grep -v ' total$' | sort -rn | head -5
+ff \( -name '*.dart' -o -name '*.ts' -o -name '*.tsx' -o -name '*.py' -o -name '*.go' \) | grep -vE '(^|/)(test|tests|__tests__|integration_test|spec)/|_test\.|\.test\.|\.spec\.|\.g\.dart$|\.freezed\.dart$' | xargs wc -l 2>/dev/null | grep -v ' total$' | sort -rn | head -5
 
 sec "Dependencies of interest"
 if [ -f "$APP/pubspec.yaml" ]; then
@@ -91,9 +91,9 @@ sec "Test levels"
 tg() { grep -rIlE "$1" "$APP" --include='*.dart' --include='*.ts' --include='*.tsx' --include='*.js' --include='*.jsx' --include='*.py' --include='*.go' --exclude-dir=node_modules --exclude-dir=build --exclude-dir=dist --exclude-dir=.dart_tool --exclude-dir=.next --exclude-dir=.venv --exclude-dir=venv --exclude-dir=Pods 2>/dev/null | wc -l | tr -d ' '; }
 cnt() { wc -l | tr -d ' '; }
 ALLT=$(cd "$APP" && ff \( -name '*_test.*' -o -name '*.test.*' -o -name '*.spec.*' -o -name 'test_*.py' \) | grep -E "$TEXT")
-E2EP='(^|/)(e2e[^/]*|end-to-end|end_to_end|playwright|cypress)/|[._]e2e[._]'
+E2EP='(^|/)(e2e[^/]*|end-to-end|end_to_end|playwright|cypress|integration_test)/|[._]e2e[._]'
 E2EF=$(printf '%s\n' "$ALLT" | grep -cE "$E2EP")
-INTEG=$(printf '%s\n' "$ALLT" | grep -vE "$E2EP" | grep -cE '(^|/)(integration_test|integration|integration_tests|it)/|[._]integration[._]|_integration_test\.')
+INTEG=$(printf '%s\n' "$ALLT" | grep -vE "$E2EP" | grep -cE '(^|/)(integration|integration_tests|it)/|[._]integration[._]|_integration_test\.')
 TOTAL=$(printf '%s\n' "$ALLT" | grep -c .)
 echo "- unit and component: $((TOTAL - INTEG - E2EF)) test files"
 echo "- integration: $INTEG test files"
@@ -104,7 +104,7 @@ e2e=""
 for f in playwright.config.ts playwright.config.js cypress.config.ts cypress.config.js .detoxrc.js .detoxrc.json wdio.conf.js; do [ -e "$APP/$f" ] && e2e="$e2e $f"; done
 for d in .maestro maestro "$APP/.maestro" "$APP/maestro"; do [ -d "$d" ] && { e2e="$e2e $d/"; break; }; done
 [ -f "$APP/pubspec.yaml" ] && grep -qE '^\s+patrol:' "$APP/pubspec.yaml" && e2e="$e2e patrol"
-[ -d "$APP/integration_test" ] && e2e="$e2e integration_test/(Flutter, runs on a device — files there are counted under integration above)"
+[ -d "$APP/integration_test" ] && e2e="$e2e integration_test/(Flutter, runs on a device — its files are counted here)"
 echo "- end-to-end: $E2EF test files; tools:${e2e:- none}"
 LOADF=$( { cd "$APP" && ff \( -name 'locustfile*.py' -o -name '*.jmx' -o -name '*.k6.js' -o -name 'artillery*.y*ml' \); } | cnt)
 LOADK=$(tg "from ['\"]k6(/|['\"])|from locust import|import locust")
@@ -145,7 +145,7 @@ EF=$(cd "$APP" && ff -name '*.csproj' | xargs grep -lE 'EntityFrameworkCore|Micr
 CS=$(cd "$APP" && ff \( -name 'appsettings*.json' -o -name 'web.config' -o -name 'Web.config' \) | xargs grep -liE 'ConnectionStrings|<connectionStrings' 2>/dev/null | head -4 | tr '\n' ' '); [ -n "$CS" ] && dbl "connection strings declared in (values not read): $CS"
 drv=""
 for m in "$APP/pubspec.yaml" "$APP/package.json" "$APP/pyproject.toml" "$APP/requirements.txt" "$APP/go.mod" "$APP/Cargo.toml" "$APP/composer.json" "$APP/Gemfile"; do
-  [ -f "$m" ] && drv="$drv $(grep -oE '(^|[^A-Za-z0-9_-])(supabase_flutter|firebase_core|@supabase/supabase-js|supabase|cloud_firestore|firebase_database|firebase-admin|firebase|sqflite|drift|isar|hive|objectbox|realm|"pg"|postgres|psycopg[0-9]?|asyncpg|pgx|"mssql"|tedious|pyodbc|pymssql|go-mssqldb|mysql2?|pymysql|mongoose|mongodb|pymongo|redis|sqlalchemy|typeorm|sequelize|drizzle-orm|@prisma/client|knex|gorm|sqlx|diesel|better-sqlite3|sqlite3)([^A-Za-z0-9_-]|$)' "$m" | sed -E 's/^[^A-Za-z@]+//; s/[^A-Za-z0-9]+$//' | sort -u | tr '\n' ' ')"
+  [ -f "$m" ] && drv="$drv $(grep -vE '^[[:space:]]*(#|//)' "$m" | grep -oE '(^|[^A-Za-z0-9_-])(supabase_flutter|firebase_core|@supabase/supabase-js|supabase|cloud_firestore|firebase_database|firebase-admin|firebase|sqflite|drift|isar|hive|objectbox|realm|"pg"|postgres|psycopg[0-9]?|asyncpg|pgx|"mssql"|tedious|pyodbc|pymssql|go-mssqldb|mysql2?|pymysql|mongoose|mongodb|pymongo|redis|sqlalchemy|typeorm|sequelize|drizzle-orm|@prisma/client|knex|gorm|sqlx|diesel|better-sqlite3|sqlite3)([^A-Za-z0-9_-]|$)' | sed -E 's/^[^A-Za-z@]+//; s/[^A-Za-z0-9]+$//' | sort -u | tr '\n' ' ')"
 done
 drv=$(echo $drv | tr ' ' '\n' | sort -u | tr '\n' ' ')
 [ -n "${drv// /}" ] && dbl "data libraries in manifests: $drv"
@@ -175,11 +175,12 @@ trk=$(git ls-files 2>/dev/null | grep -E '(^|/)(\.env(\.json)?|key\.properties|[
 [ -f .gitignore ] && { grep -qE '^\s*\.env' .gitignore && echo "- .env ignored by git: yes" || echo "- .env ignored by git: NO (check with the user before assuming this is a mistake)"; }
 
 sec "Invariant markers in code (count)"
-N=$(grep -rIiE '(^|[^A-Za-z])(NEVER|JANGAN|WAJIB|DO NOT|MUST NOT|HACK|WORKAROUND)([^A-Za-z]|$)' --exclude-dir=dist --include='*.dart' --include='*.ts' --include='*.tsx' --include='*.py' --include='*.go' --exclude-dir=node_modules --exclude-dir=build --exclude-dir=.dart_tool . 2>/dev/null | wc -l | tr -d ' ')
+N=$(grep -rIiE '(^|[^A-Za-z])(NEVER|JANGAN|WAJIB|DO NOT|MUST NOT|HACK|WORKAROUND)([^A-Za-z]|$)' --exclude-dir=dist --include='*.dart' --include='*.ts' --include='*.tsx' --include='*.js' --include='*.jsx' --include='*.py' --include='*.go' --include='*.rs' --include='*.kt' --include='*.swift' --include='*.php' --exclude-dir=node_modules --exclude-dir=build --exclude-dir=.dart_tool --exclude-dir=.claude . 2>/dev/null | wc -l | tr -d ' ')
 echo "- $N lines; list them with: grep -rnIiwE '(NEVER|JANGAN|WAJIB|DO NOT|MUST NOT|HACK|WORKAROUND)' <src dir> | head -40"
 
 # Evidence for the optional operations pieces (deploy, crash triage). Names and paths only.
 sec "Release and operations signals"
+ops() {
 [ -f "$APP/pubspec.yaml" ] && grep -m1 -nE '^version:' "$APP/pubspec.yaml" | sed "s|^|- $APP/pubspec.yaml:|"
 if [ -d "$APP/android" ]; then
   [ -f "$APP/android/key.properties" ] && echo "- android: release signing file present ($APP/android/key.properties)" || echo "- android: folder present, no key.properties (no release signing found)"
@@ -203,6 +204,13 @@ for d in scripts tool "$APP/scripts" "$APP/tool"; do
   [ -d "$d" ] && ls "$d" 2>/dev/null | grep -iE 'release|deploy|gate|build' | head -6 | sed "s|^|- release script: $d/|"
   [ "$APP" = . ] && [ "$d" = tool ] && break
 done
+[ -f "$APP/package.json" ] && grep -m1 -nE '^\s*"version":' "$APP/package.json" | tr -s ' ' | sed "s|^|- $APP/package.json:|"
+if [ -d .github/workflows ]; then
+  grep -nE 'uses:.*(deploy|hosting|pages|vercel|netlify|upload-google-play|testflight)|(firebase|vercel|netlify|wrangler|flyctl|gcloud app) deploy' .github/workflows/*.y*ml 2>/dev/null | head -4 | cut -c1-170 | sed 's/^/- deploy in CI: /'
+fi
+}
+OPS=$(ops)
+[ -n "$OPS" ] && printf '%s\n' "$OPS" || echo "- none found"
 
 sec "Existing Claude setup"
 for f in CLAUDE.md AGENTS.md .mcp.json; do [ -e "$f" ] && echo "- $f ($(wc -l < "$f" | tr -d ' ') lines)"; done
@@ -244,7 +252,11 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
   keys=$(printf '%s\n' "$subj" | grep -oE '(^|[^A-Za-z0-9])[A-Z][A-Z0-9]{1,9}-[0-9]+' | sed -E 's/^[^A-Z]//; s/-[0-9]+$//' | sort | uniq -c | sort -rn | head -3 | awk '{printf "%s×%s ", $2, $1}')
   echo "- subjects with a KEY-123 code: $(printf '%s\n' "$subj" | grep -cE '(^|[^A-Za-z0-9])[A-Z][A-Z0-9]{1,9}-[0-9]+')${keys:+ — keys: $keys}"
   echo "- subjects with a bare #N (not Trello, not a PR merge): $(printf '%s\n' "$subj" | grep -viE 'trello ?#|^Merge pull request' | grep -cE '#[0-9]+')"
-  echo "- branches with a ticket code: $(git for-each-ref --format='%(refname:short)' refs/heads refs/remotes 2>/dev/null | grep -cE '[A-Z][A-Z0-9]+-[0-9]+|/[0-9]+-')"
+  # Branch names: live refs plus the names kept in merge subjects (merged branches are often deleted).
+  bn=$( { git for-each-ref --format='%(refname:short)' refs/heads refs/remotes 2>/dev/null | sed 's|^origin/||'; printf '%s\n' "$subj" | sed -nE "s/^Merge (remote-tracking )?branch '([^']+)'.*/\2/p"; } | sort -u)
+  echo "- branch names with a ticket code (live and merged): $(printf '%s\n' "$bn" | grep -cE '[A-Z][A-Z0-9]+-[0-9]+|/[0-9]+-|(^|/)[a-z]?[0-9]{3,}($|[-_/])')$(printf '%s\n' "$bn" | grep -E '[A-Z][A-Z0-9]+-[0-9]+|/[0-9]+-|(^|/)[a-z]?[0-9]{3,}($|[-_/])' | head -2 | tr '\n' ' ' | sed 's/^/ — for example: /')"
+  mpre=$(printf '%s\n' "$subj" | sed -nE "s/^Merge (remote-tracking )?branch '([^']+)'.*/\2/p" | grep / | cut -d/ -f1 | sort | uniq -c | sort -rn | head -5 | awk '{printf "%s/ (%s) ", $2, $1}')
+  echo "- merged branch name prefixes (from merge subjects): ${mpre:-none}"
   ex=$(printf '%s\n' "$subj" | grep -iE 'trello ?#[0-9]+|[A-Z][A-Z0-9]+-[0-9]+|#[0-9]+' | head -2 | cut -c1-160 | sed 's/^/    /')
   [ -n "$ex" ] && { echo "- examples:"; echo "$ex"; }
 else echo "- not a git repository"; fi

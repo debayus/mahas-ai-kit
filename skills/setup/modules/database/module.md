@@ -19,7 +19,7 @@ Apply the first rule that matches and quote its evidence line in the question:
 1. "no database evidence found", or only on-device libraries, or Firebase without a "used in code" line (hosting, messaging, analytics only) → `none`. Do not ask.
 2. A database server is listed in `.mcp.json`, or the engine's CLI is installed and the repo has its config (for example `supabase/config.toml` with the `supabase` CLI) → `read`.
 3. Migration files, rules files, or a schema file exist → `files`.
-4. Otherwise (a server-side database is used in code, but the repo holds no migration, rules, or schema file) → `none`, and still ask. Say in the plan that access rules live outside the repo and cannot be checked from it.
+4. Otherwise (a server-side database is used in code, but the repo holds no migration, rules, or schema file) → `none`, and still ask. Say in the plan that access rules live outside the repo and cannot be checked from it. Whatever the answer, record how the app reaches the database in `data-model.md`, or in `conventions.md` in tier lite.
 
 For rule 2, "its config" means a database config: `supabase/config.toml`, or a `firebase.json` that has a `firestore` or `database` entry. A hosting-only `firebase.json` does not count, and a CLI on the machine is not evidence on its own.
 
@@ -48,8 +48,8 @@ Firestore or Realtime Database used in code without a rules file in the repo: th
 |---|---|
 | `{{DB_ENGINE}}` | The engine and what it holds, in one line |
 | `{{DB_ENVIRONMENTS}}` | The environments the user named, and which is production. Identify each by name or project reference only |
-| `{{DB_SCHEMA_SOURCE}}` | Where the current schema is read from in the repo: the migrations folder, the schema file, or the rules file, as links. With `data-model.md` present, link to it instead of describing tables |
-| `{{DB_MIGRATION_NEW}}` | How a new migration is created here: the command or the file naming pattern, taken from the latest existing migration and the repo's own scripts |
+| `{{DB_SCHEMA_SOURCE}}` | Where the current schema is read from in the repo: the migrations folder, the schema file, or the rules file, as links. With `data-model.md` present, link to it instead of describing tables. None of these in the repo → link the code that defines the collections or tables |
+| `{{DB_MIGRATION_NEW}}` | How a new migration is created here: the command or the file naming pattern, taken from the latest existing migration and the repo's own scripts. An engine without migration files (Firestore) → write that a schema change is a code change plus a rules change in the same commit, and delete the line about applied migrations |
 | `{{DB_MIGRATION_CHECK}}` | The command that tests migrations locally if the repo has one (for example a local reset or a migration test script). None → delete the line |
 | `{{DB_READ_TOOL}}` | Option `read`: the connection, in this order of preference: an MCP server already configured (name it as configured), then a CLI already logged in. Option `files` → delete the block |
 | `{{DB_APPLY_POLICY}}` | The user's answer. Default: "Never apply a migration or run a statement that writes. Give the user the exact command instead." |

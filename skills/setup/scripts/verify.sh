@@ -9,6 +9,8 @@ ok() { echo "ok:   $*"; }
 EXISTING=0; [ "${1:-}" = "--existing" ] && EXISTING=1
 warns=0
 warn() { echo "WARN: $*"; warns=$((warns+1)); }
+# soft: a failure in a fresh setup, a warning in a setup the kit did not generate
+soft() { if [ "$EXISTING" -eq 1 ]; then warn "$*"; else bad "$*"; fi; }
 limit() { # file max
   [ -f "$1" ] || return 0
   n=$(wc -l < "$1" | tr -d ' ')
@@ -20,8 +22,17 @@ limit() { # file max
 if [ -f CLAUDE.md ]; then limit CLAUDE.md 40; else bad "CLAUDE.md missing"; fi
 [ -d .claude ] || { bad ".claude/ missing"; exit 1; }
 
+# 0. hot rules: at most 6, each with a link to the file that proves it
+if [ -f CLAUDE.md ]; then
+  hot=$(awk '/^## /{on=0} tolower($0) ~ /^## hot rules/{on=1; next} on && /^([0-9]+\.|[-*]) /' CLAUDE.md)
+  nh=$(printf '%s\n' "$hot" | grep -c .)
+  if [ "$nh" -le 6 ]; then ok "$nh hot rules"; else soft "$nh hot rules in CLAUDE.md (max 6) — move the rest into a stack skill or .claude/.agent/"; fi
+  nl=$(printf '%s\n' "$hot" | grep . | grep -vc '](')
+  [ "$nl" -eq 0 ] || soft "$nl hot rule(s) in CLAUDE.md without a link to the file that proves them"
+fi
+
 # 1. no leftover placeholders
-left=$(grep -rnE '\{\{[A-Z_]+\}\}' CLAUDE.md .claude --include='*.md' --include='*.js' --include='*.json' --include='*.sh' 2>/dev/null)
+left=$(grep -rnE '\{\{[A-Z_]+\}\}' CLAUDE.md .claude --exclude-dir=worktrees --include='*.md' --include='*.js' --include='*.json' --include='*.sh' 2>/dev/null)
 [ -z "$left" ] && ok "no leftover placeholders" || { bad "leftover placeholders:"; echo "$left" | head -20; }
 
 # 2. frontmatter + size limits
@@ -36,6 +47,7 @@ for f in .claude/skills/*/SKILL.md; do [ -e "$f" ] || continue
   head -1 "$f" | grep -q '^---$' && grep -q '^name:' "$f" && grep -q '^description:' "$f" || bad "$f: frontmatter needs name + description"
   d=$(basename "$(dirname "$f")"); grep -q "^name: $d\$" "$f" || bad "$f: name must equal folder name '$d'"
   case "$d" in stack-*) limit "$f" 50 ;; *) limit "$f" 60 ;; esac
+  case "$d" in stack-*) nr=$(grep -cE '^[0-9]+\. \*\*' "$f"); [ "$nr" -le 8 ] || soft "$f has $nr hard rules (max 8)" ;; esac
 done
 for f in .claude/commands/*.md; do [ -e "$f" ] || continue; limit "$f" 30; done
 n=$(ls -d .claude/skills/stack-* 2>/dev/null | wc -l | tr -d ' ')
@@ -45,7 +57,7 @@ n=$(ls -d .claude/skills/stack-* 2>/dev/null | wc -l | tr -d ' ')
 if [ -f .claude/kit.json ] && grep -qE '"kit": *"[0-9]+\.[0-9]+\.[0-9]+"' .claude/kit.json; then ok "kit record present"
 elif [ "$EXISTING" -eq 1 ]; then warn "no .claude/kit.json — adopt this setup (SKILL.md Step 6)"
 else bad ".claude/kit.json missing or has no \"kit\" version"; fi
-mark=$(grep -rnE '<!-- /?option' CLAUDE.md .claude --include='*.md' 2>/dev/null)
+mark=$(grep -rnE '<!-- /?option' CLAUDE.md .claude --exclude-dir=worktrees --include='*.md' 2>/dev/null)
 [ -z "$mark" ] && ok "no leftover option markers" || { bad "leftover option markers:"; echo "$mark" | head -10; }
 ns=$(ls -d .claude/skills/*/ 2>/dev/null | wc -l | tr -d ' ')
 if [ "$ns" -le 10 ]; then ok "$ns skills in total"
@@ -91,8 +103,27 @@ for s in $(grep -rhoE '`(stack|process)-[a-z0-9-]+`' .claude/agents .claude/comm
   [ -d ".claude/skills/$s" ] || bad "skill '$s' is referenced but does not exist"
 done
 
+# 7b. commands and agents that are named must exist
+builtin=' add-dir agents bug clear compact config context cost doctor exit export fast help hooks ide init login logout loop mcp memory model permissions plugin pr-comments release-notes resume review rewind schedule status statusline terminal-setup todos usage vim dev etc tmp usr var bin opt home '
+# Only a name that opens a code span counts (`/plan`, `/plan <request>`); a root folder of that name is a path.
+for c in $(grep -rhoE '(^|[ (])`/[a-z][a-z0-9-]*[ `]' CLAUDE.md .claude/agents .claude/commands .claude/skills .claude/README.md 2>/dev/null | tr -d '`/ (' | sort -u); do
+  case "$builtin" in *" $c "*) continue ;; esac
+  [ -e "$c" ] && continue
+  [ -f ".claude/commands/$c.md" ] || [ -d ".claude/skills/$c" ] || soft "command '/$c' is named but .claude/commands/$c.md does not exist"
+done
+for a in $(grep -rhoE '`[a-z][a-z0-9-]+` agent' .claude/agents .claude/commands .claude/skills 2>/dev/null | sed -E 's/`([^`]+)`.*/\1/' | sort -u); do
+  [ -f ".claude/agents/$a.md" ] || soft "agent '$a' is named but .claude/agents/$a.md does not exist"
+done
+
+# 7c. MCP tools that are named: is their server in .mcp.json? A server may also be connected
+# at user level, which this script cannot see, so this is a warning in every mode.
+for m in $(grep -rhoE 'mcp__[A-Za-z0-9-]+__' .claude/agents .claude/commands .claude/skills 2>/dev/null | sed -E 's/^mcp__//; s/__$//' | sort -u); do
+  if [ -f .mcp.json ] && grep -qE "\"$m\" *:" .mcp.json; then ok "MCP server '$m' is in .mcp.json"
+  else warn "tools of MCP server '$m' are named, but '$m' is not in .mcp.json — fine only if it is connected at user level"; fi
+done
+
 # 8. no secret-looking values
-sec=$(grep -rnIE '(sk_live_|sk-[A-Za-z0-9]{20,}|AIza[0-9A-Za-z_-]{30,}|eyJ[A-Za-z0-9_-]{20,}\.eyJ|-----BEGIN [A-Z ]*PRIVATE KEY)' CLAUDE.md .claude 2>/dev/null)
+sec=$(grep -rnIE '(sk_live_|sk-[A-Za-z0-9]{20,}|AIza[0-9A-Za-z_-]{30,}|eyJ[A-Za-z0-9_-]{20,}\.eyJ|-----BEGIN [A-Z ]*PRIVATE KEY)' CLAUDE.md .claude --exclude-dir=worktrees 2>/dev/null)
 [ -z "$sec" ] && ok "no secret-looking values" || { bad "possible secrets in generated files:"; echo "$sec" | cut -c1-120; }
 
 [ "$warns" -gt 0 ] && echo "$warns warning(s)"

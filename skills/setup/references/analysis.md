@@ -19,6 +19,8 @@ Goal: answer the questions below with the fewest file reads. Prefer Grep and dir
 
 **Node/TypeScript** — `package.json` scripts, `tsconfig.json`, ESLint/Prettier config, entry point, one route/handler through to the data layer, ORM schema and migrations folder, test setup file.
 
+**Web app without a server of its own (React, Vue, Svelte with Vite or similar)** — `package.json` scripts, the bundler config, the router or the top-level component that switches pages, one page through to the service or hook that reads and writes data, how the backend client is initialised and where its keys come from (`import.meta.env`, a config file), where UI strings live, the hosting config and the CI workflow that deploys. There is often no analyze script: use `tsc --noEmit` when a `tsconfig.json` exists.
+
 **Python** — `pyproject.toml`, entry point, settings module, one view/handler through to models, migrations folder, `conftest.py`.
 
 **Go / Rust / other** — manifest, `main`, one request path end to end, migrations, test helpers, Makefile targets.

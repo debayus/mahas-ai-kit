@@ -70,8 +70,27 @@ bad bad-json; echo '{' > "$TMP/bad-json/.claude/settings.json"
 expect_fail bad-json "settings.json is not valid JSON"
 bad bad-secret; echo 'key: sk_live_abcdefghijklmnop' >> "$TMP/bad-secret/.claude/README.md"
 expect_fail bad-secret "possible secrets"
-bad no-record; rm "$TMP/no-record/.claude/kit.json"
+bad no-record; rm "$TMP/no-record/.claude/kit.json" "$TMP/no-record/.claude/README.md"
 expect_fail no-record "kit.json missing"
+
+bad bad-hot-rules; for i in 1 2 3 4 5 6 7; do sed -i.bak "s|^## Run\$|- Rule $i, see [README](README.md).\\
+## Run|" "$TMP/bad-hot-rules/CLAUDE.md"; done; rm -f "$TMP/bad-hot-rules/CLAUDE.md.bak"
+expect_fail bad-hot-rules "7 hot rules in CLAUDE.md (max 6)"
+bad bad-hot-link; sed -i.bak 's|^## Run$|- A rule with no proof.\
+## Run|' "$TMP/bad-hot-link/CLAUDE.md"; rm -f "$TMP/bad-hot-link/CLAUDE.md.bak"
+expect_fail bad-hot-link "without a link to the file that proves"
+bad bad-command; echo 'Then run `/ship <request>`.' >> "$TMP/bad-command/.claude/commands/plan.md"
+expect_fail bad-command "command '/ship' is named"
+bad bad-agent; echo 'Spawn the `deployer` agent.' >> "$TMP/bad-agent/.claude/commands/plan.md"
+expect_fail bad-agent "agent 'deployer' is named"
+
+echo "## verify.sh does not flag what is fine"
+bad fine-refs
+{ echo 'Run `flutter analyze`/build first, use `/clear` after, and see `/lib` for sources.'; echo 'Use `mcp__trello__get_card` to read the card.'; } >> "$TMP/fine-refs/.claude/commands/plan.md"
+mkdir -p "$TMP/fine-refs/lib" "$TMP/fine-refs/.claude/worktrees/x"; echo 'Leftover {{TEST_CMD}} in another checkout.' > "$TMP/fine-refs/.claude/worktrees/x/CLAUDE.md"
+expect_pass fine-refs
+out=$(cd "$TMP/fine-refs" && bash "$VERIFY" 2>&1)
+printf '%s\n' "$out" | grep -q "MCP server 'trello' are named" && yes "an MCP server missing from .mcp.json is a warning" || no "an MCP server missing from .mcp.json is a warning" "$(printf '%s\n' "$out" | grep -i mcp)"
 
 echo "## --existing turns size and record problems into warnings"
 expect_pass no-record --existing
@@ -130,6 +149,11 @@ has "PR merges are counted on their own" "'Merge pull request #N' commits (last 
 has "(#N) endings are counted apart from PR merges" "(last 200; a squash-merged PR or a ticket number — check against the Tickets section): 3" "ending in"
 has "local branch merges are counted" "'Merge branch ...' (last 200): 1" "local branch"
 has "one person with two emails is one author; automation is separate" "human commit authors by name (last 200): 1; automated authors: 1" "authors"
+git checkout -q -b wt/t2101 && commit "fix: on a ticket branch" && git checkout -q main && git merge -q --no-ff -m "Merge branch 'wt/t2101'" wt/t2101 && git branch -q -D wt/t2101
+OUT=$(scan)
+has "a merged, deleted ticket branch is still seen" "branch names with a ticket code (live and merged): 1 — for example: wt/t2101" "ticket code"
+has "merged branch prefixes are listed" "merged branch name prefixes (from merge subjects): wt/ (1)" "prefixes"
+has "a repo with nothing to release says so" "- none found" "none"
 has "no .claude folder is a fresh setup" "no .claude/ folder (fresh setup)" "claude"
 
 echo "## detect.sh: tests, data libraries, existing setup"
@@ -140,6 +164,7 @@ name: mock
 dependencies:
   archive: ^3.0.0
   supabase_flutter: ^2.0.0
+  # drift: was replaced
 EOF
 echo 'void main() {}' > lib/main.dart
 echo '// whenever the perpanjangan runs' > lib/note.dart
@@ -154,8 +179,10 @@ git add -A && commit "feat: app"
 OUT=$(scan)
 has "test files are counted by code extension only" "- test files: 3" "test files"
 has "unit count is not reduced twice" "- unit and component: 2 test files" "unit and"
-has "integration files are counted once" "- integration: 1 test files" "integration:"
+has "Flutter integration_test files are end-to-end, not integration" "- end-to-end: 1 test files" "end-to-end"
+has "integration count excludes them" "- integration: 0 test files" "integration:"
 hasnt "\"archive\" is not read as the hive library" "hive"
+hasnt "a library named only in a comment is not listed" "drift"
 has "supabase migrations are found" "supabase migrations: ./supabase/migrations/ (1 files" "supabase"
 has "a .claude folder without agents, skills, or commands is a fresh setup" "treat as a fresh setup" "claude"
 has "a tracked .env is flagged" "TRACKED IN GIT" "env"
@@ -164,7 +191,22 @@ has "\"whenever\" and \"perpanjangan\" are not invariant markers" "- 0 lines; li
 echo "## detect.sh: empty repository and Firestore in code"
 repo r-web
 cat > package.json <<'EOF'
-{ "name": "mock", "dependencies": { "firebase": "^11.0.0", "react": "^19.0.0" }, "scripts": { "build": "vite build" } }
+{
+  "name": "mock",
+  "version": "1.2.3",
+  "dependencies": { "firebase": "^11.0.0", "react": "^19.0.0" },
+  "scripts": { "build": "vite build" }
+}
+EOF
+mkdir -p .github/workflows
+cat > .github/workflows/deploy.yml <<'EOF'
+on:
+  push:
+    branches: [main]
+jobs:
+  deploy:
+    steps:
+      - uses: FirebaseExtended/action-hosting-deploy@v0
 EOF
 mkdir -p src && echo "import { getFirestore } from 'firebase/firestore'" > src/db.ts
 echo '{ "hosting": {} }' > firebase.json
@@ -173,6 +215,8 @@ OUT=$(scan)
 has "no test files is stated" "- no test files found" "test"
 has "a repo without tests is tier lite" "suggested tier: lite" "tier"
 has "Firestore used in code is reported" "Firestore or Realtime Database used in code: 1 files" "Firestore"
+has "the package.json version is listed under release signals" "- ./package.json:3: \"version\": \"1.2.3\"" "version"
+has "a deploy done by CI is listed under release signals" "- deploy in CI:" "deploy"
 has "firebase.json alone is not called a database" "not by itself a database" "firebase.json"
 
 echo

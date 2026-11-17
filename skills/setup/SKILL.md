@@ -39,7 +39,7 @@ Follow `references/analysis.md`. Read only what it lists for the detected stack,
 
 Pick the tier using `references/generation-rules.md` (`--lite` / `--full` override it). Then present to the user:
 
-- What you found (stack, architecture in one or two sentences, test and CI status).
+- What you found (stack, architecture in one or two sentences, test and CI status). If the scan's CI lines show that a push to the default branch deploys, say so here and make it a hot rule.
 - The project's hard rules you inferred, each with the file that proves it.
 - The list of files you will create, and what you are deliberately leaving out and why.
 - The recommended option for each module, and the operations pieces the evidence supports (deploy, crash triage), each with its evidence.
@@ -53,7 +53,7 @@ For each module in `modules/` (see `modules/README.md`), apply its recommendatio
 2. Only if the user chooses one by one: one question per module, recommended option first, then one multi-select question for the operations pieces. No operations piece has evidence → skip that question and say so in the plan. A module whose `module.md` says "do not ask" is skipped the same way. Deploy pieces publish to a store when used, so they are never pre-selected without the user seeing them named.
 3. Then the follow-up questions the chosen options need and the code cannot answer (each `module.md` lists them), the language for commit messages if the history is mixed, and where release credentials live if the default paths do not exist.
 
-Keep it to as few questions as the choices allow; never ask what the scan already answered. With `--dry-run`, stop after this step: show the plan and the questions with their recommended answers, ask nothing, and write nothing.
+Keep it to as few questions as the choices allow; never ask what the scan already answered. With `--dry-run`, stop after this step: show the plan and the questions with their recommended answers, ask nothing, and write nothing. "Write nothing" means no file that git tracks or would track; the analyze and test commands of Step 2 still run, since the plan depends on their result.
 
 ## Step 4 — Generate
 
@@ -64,17 +64,17 @@ Order:
 1. `.claude/.agent/` deep docs (see generation rules for which files).
 2. `CLAUDE.md` from `templates/docs/CLAUDE.md`.
 3. Stack skills (`.claude/skills/stack-*/SKILL.md`) shaped like `templates/skills/stack-skill.md`.
-4. Process skills, agents, commands, and the workflow — only those in the chosen tier, plus the operations pieces the user accepted. A skill template `templates/skills/<name>.md` is written to `.claude/skills/<name>/SKILL.md`.
+4. Process skills, agents, commands, and the workflow — only those in the chosen tier, plus the operations pieces the user accepted. A skill template `templates/skills/<name>.md` is written to `.claude/skills/<name>/SKILL.md`. Blocks marked `<!-- option: lite -->` or `<!-- option: standard full -->` are resolved by tier.
 5. Module files for the options the user chose, from `modules/<name>/templates/`, resolving option blocks as `modules/README.md` describes. A module set to `none`: delete the lines in generated commands that refer to its skill.
-6. Hooks: copy the scripts to `.claude/hooks/`, make them executable, remove formatter branches for languages the repo does not use, and merge `templates/hooks/settings-hooks.json` into `.claude/settings.json` (merge, do not replace).
+6. Hooks: copy the scripts to `.claude/hooks/`, make them executable, remove formatter branches for languages the repo does not use, and merge `templates/hooks/settings-hooks.json` into `.claude/settings.json` (merge, do not replace). No formatter in the repo: leave out `format-on-edit.sh` and its `PostToolUse` entry. Nothing to protect: leave out `protect-files.sh`, its list, and its `PreToolUse` entry.
 7. Tooling changes the user approved. For stricter analyzer or linter settings: apply, re-run the analyzer, and compare with the baseline. If new findings appear, report the count and ask whether to keep, fix, or revert — do not silently leave the project failing.
-8. `.claude/README.md` — a short map of what was generated — and `.claude/kit.json`, the kit record described in the generation rules.
+8. `.claude/README.md` from `templates/docs/claude-README.md`, and `.claude/kit.json`, the kit record described in the generation rules.
 
 ## Step 5 — Verify, then report
 
 Run `bash <skill folder>/scripts/verify.sh` from the target repository root and fix everything it flags. Then confirm by hand that each command written in CLAUDE.md ran successfully in this session.
 
-Report to the user: tier chosen, files created, what was skipped and why, tooling changes and their result, anything you could not verify, and how to start (`/plan <request>` or `/pipeline <request>`). Do not commit; offer a commit message.
+Report to the user: tier chosen, files created, what was skipped and why, tooling changes and their result, anything you could not verify, and how to start (`/plan <request>`; outside tier lite also `/pipeline <request>`). Do not commit; offer a commit message.
 
 ## Step 6 — Update mode
 
@@ -86,9 +86,10 @@ For a repo that already has a setup. Run Steps 1–2, then `bash <skill folder>/
 
 1. Map what exists by what it does, not by its name. A command that runs plan → design → code → test → review is the pipeline whatever it is called (`/engineer`, `/ship`, `/feature`); an agent that runs the gate and fixes failures is the tester (`test-fixer`, `test-runner`); a skill holding commit rules is git delivery (`git-delivery`, `commit-prep`). Show the user this mapping.
 2. Keep existing names and files. Never rename, merge, or delete them, and never add a kit piece that duplicates one that already does the job.
-3. Propose only what is missing after the mapping: hooks, deep docs, a noise-rule section for the reviewer, and each module or operations piece whose evidence is there and that nothing existing covers. Use the module's own recommendation rules. The "Follow all recommendations" question lists only these additions, never a piece that is already covered.
-   - Partly covered (an existing skill does half of what the kit's piece does): do not add the kit's file beside it. Offer to add the missing sections to the existing file, as a diff, or leave it.
+3. Propose only what is missing after the mapping: hooks, deep docs, a noise-rule section for the reviewer, a core command nothing existing covers (`/review-changes`, a gate-only `/test`), and each module or operations piece whose evidence is there and that nothing existing covers. Use the module's own recommendation rules. The "Follow all recommendations" question lists only these additions, never a piece that is already covered.
+   - Partly covered (an existing skill does half of what the kit's piece does): do not add the kit's file beside it. Offer to add the missing sections to the existing file, as a diff, or leave it. If that would push the file over its size limit, or the covering text sits inside a command or a deep doc instead of a skill, offer the kit's file plus a one-line pointer that replaces the inline text, and show both diffs.
    - Two existing pieces share one kit role (a gate agent and a full-suite agent): keep both and map both.
+   - A new kit file names the project's own pieces, not the kit's: if `process-ticket-offer` plays the ticket role and `/test-all` is the test command, write those names wherever the template says `process-ticket` or `/test`.
    - Also report docs that no longer match the code, and rules a hook could now enforce, as in the kit-record case.
 4. An oversized `CLAUDE.md` or agent: propose moving whole sections, unchanged, into `.claude/.agent/*.md` and leaving a link in their place. Show the diff. Nothing is dropped, only moved.
 5. Write `.claude/kit.json` when the user has accepted at least one change, or has declined them all and agrees to keep the record. Record chosen options under `modules`, declined ones as `"none"`, and every mapped piece under `adopted` (see the generation rules), so the next update does not repeat the same offers.
