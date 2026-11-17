@@ -13,7 +13,7 @@ modules/<name>/
 1. Read `module.md`. Apply its recommendation rules to the scan report to pick the recommended option and the evidence line for it.
 2. Ask the question (see Step 3 of `SKILL.md`), recommended option first.
 3. Generate the chosen option's files from the module's `templates/`. Option `none` generates nothing.
-4. Record the choice in `.claude/kit.json` under `modules`.
+4. Record the choice in `.claude/kit.json` under `modules`. A module that was not asked is not recorded.
 
 ## Option blocks in templates
 
@@ -33,7 +33,7 @@ Keep the block of the chosen option, delete the other blocks, and delete every m
 - A module never installs an MCP server and never writes a token, key, or password. It may propose a server entry the user already uses and name the env variable it needs.
 - Do not write a server name, package, or URL from memory. Take it from `.mcp.json`, from the user's configured servers, or from the user's answer.
 - An option marked "experimental" in `module.md` has not been run on a real project yet. Say so in the plan when it is chosen.
-- Adding a module later: `setup --add <name>` runs Steps 1–2 for that module's evidence only, asks its question, generates, and updates `kit.json`.
+- Adding a module later: `setup --add <name>` runs the scan, reads only what that module's evidence needs, asks its question, generates, and updates `kit.json`.
 
 ## Modules
 

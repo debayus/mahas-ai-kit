@@ -5,7 +5,7 @@
 | Tier | When | What is generated |
 |---|---|---|
 | **lite** | Under ~40 source files, or no automated tests | `CLAUDE.md`, `.agent/README.md` + `overview.md` + `conventions.md`, one stack skill, `planner` and `reviewer` agents, `process-planning`, `process-code-review`, `/plan` (planner only), `/review-changes`, the format hook if the repo has a formatter, the protect hook if the repo has files to protect |
-| **standard** | 40–300 source files with tests | lite + `architecture.md`, `testing.md`, `glossary.md` if needed, up to 3 stack skills, all 5 agents, `process-planning`, `process-tech-design`, `/pipeline`, `/plan`, `/test`, workflow, both hooks |
+| **standard** | 40–300 source files with tests | lite + `architecture.md`, `testing.md`, `glossary.md` if needed, up to 3 stack skills, all 5 agents, `process-planning`, `process-tech-design`, `/pipeline`, `/plan`, `/test`, workflow, the hooks that apply |
 | **full** | Over ~300 source files, or persistent data with migrations/sync, or multiple roles/tenants | standard + `data-model.md`, a data stack skill, `workflows.md` (release/ops runbooks found in the repo) |
 
 Size and tests decide the tier first: a small repo or one without tests is lite even if it has shared data or several roles. Then add single pieces from a higher tier when the code clearly needs them (a data section, a second stack skill), and drop a piece that does not apply. State each such decision in the plan. Data saved on the device with a version number and migration functions (a save file format, a local database schema) counts as persistent data with migrations.
@@ -69,12 +69,12 @@ Rules for these pieces:
 | Command | 30 lines |
 | `.agent/*.md` | As long as needed, but no section without a file reference |
 
-Stack skills: at most 3 (4 in full tier). A skill exists only if at least two agents need it; the single stack skill of tier lite is exempt.
+Stack skills: at most 3 (4 in full tier). A skill exists only if at least two agents need it; the single stack skill of tier lite, and every stack skill when the `pipeline` module is `none`, is exempt.
 
 ## Writing rules
 
 - A hard rule = an imperative + the reason in one clause + a link to the file that proves it. No rule without the link.
-- Use exact commands that ran successfully in Step 2. Mark a command "unverified" if it could not be run (e.g. needs a device).
+- Use exact commands that ran successfully in Step 2. A command written into the workflow file sits inside a single-quoted JavaScript string: escape any single quote in it. Mark a command "unverified" if it could not be run (e.g. needs a device).
 - Link to source files with relative Markdown links instead of quoting code.
 - Do not restate what the linter, formatter, or CI already enforces — name the gate once in CLAUDE.md.
 - Never write secret values, tokens, or real credentials. Refer to the env mechanism only.
@@ -97,12 +97,14 @@ Stack skills: at most 3 (4 in full tier). A skill exists only if at least two ag
 | `{{DOC_INDEX_ROWS}}` | One row per generated deep doc: file, what it covers, when to read it |
 | `{{DATE}}` `{{COMMIT}}` | Today's date and the short SHA from the scan |
 | `{{KIT_VERSION}}` `{{TIER}}` `{{SETUP_MAP}}` `{{CHOICES}}` `{{UNVERIFIED}}` | For `.claude/README.md`: the kit version and tier as in `kit.json`; one line per generated folder saying what is in it; each module option and operations piece chosen or declined; every command or piece marked "unverified", or "Nothing" |
-| `{{TOPIC}}` `{{TOPIC_TITLE}}` `{{WHAT_IT_COVERS}}` `{{WHEN_TO_LOAD}}` `{{DOC}}` `{{KEY_FILE}}` `{{RULE}}` `{{REASON}}` `{{PROOF_FILE}}` `{{STEP}}` `{{WHAT}}` | Stack skill slots, explained in `templates/skills/stack-skill.md` itself |
+| `{{TOPIC}}` `{{TOPIC_TITLE}}` `{{WHAT_IT_COVERS}}` `{{WHEN_TO_LOAD}}` | Stack skill: the topic as a lowercase slug (`data`, `ui`, `testing`) and as a title, what the skill covers in a few words, and the kind of work to load it before |
+| `{{DOC}}` `{{WHAT}}` `{{KEY_FILE}}` | Stack skill: the deep doc it points to (file name without `.md`) and what that doc answers; the one source file that is the source of truth for the topic. Repeat the doc line for a second doc |
+| `{{RULE}}` `{{REASON}}` `{{PROOF_FILE}}` `{{STEP}}` | Stack skill: one numbered line per hard rule (the imperative, why in one clause, the file that proves it), and one checklist line per step of the usual change in this topic |
 | `{{TEST_GUIDE}}` | "Load the `stack-testing` skill" when that skill is generated; otherwise "Read [testing.md](.claude/.agent/testing.md)", or the conventions doc in tier lite |
 | `{{LAYER_FILE_MAP}}` | The real layer order with real paths, for the design template |
 | `{{DATA_SECTION}}` | Migration + data-flow checklist, or delete the section if no persistent data |
 | `{{APP_DIR}}` | The scan's primary app root (`.` when it is the repository root). When it is a subfolder, every command in CLAUDE.md, agents, and skills is written to run from there |
-| `{{DEFAULT_BRANCH}}` | From the scan's Git section |
+| `{{DEFAULT_BRANCH}}` | From the scan's Git section. "unknown" there → ask the user |
 | `{{VERSION_FILE}}` | The file holding the version line (used by the deploy pieces) |
 | Module placeholders | Listed in each `modules/<name>/module.md` |
 | `{{BUILD_ENV_NOTE}}` | Build-time env mechanism (for example a `--dart-define-from-file` flag and the file it needs), or delete the line |
@@ -131,14 +133,15 @@ Write `.claude/kit.json` last. It is the only record of what the kit generated; 
   "tier": "lite | standard | full",
   "appDir": ".",
   "modules": { "pipeline": "kit", "git-flow": "branch", "ticket": "trello", "testing": "existing", "database": "files" },
-  "ops": ["playstore-deploy", "appstore-deploy", "crash"],
+  "ops": ["playstore-deploy", "appstore-deploy"],
+  "opsDeclined": ["crash"],
   "adopted": { "crash": ".claude/agents/crash-analyzer.md", "ticket": ".claude/skills/process-ticket-offer" }
 }
 ```
 
 `adopted` appears only for a setup the kit did not generate (update mode): it maps a kit role, module, or operations piece to the existing file that already does the job, so later runs do not offer it again. Keys: an agent role (`planner`, `architect`, `developer`, `tester`, `reviewer`), a command (`pipeline`, `plan`, `test`, `review-changes`), `workflow`, `docs`, `stack-skills`, `format-hook`, `protect-hook`, a module name, or an operations piece name. The value is one path, or a list of paths when two files share the role. An adopted module is also recorded under `modules` with the option that describes what the existing file does, and an adopted operations piece is also listed in `ops`; declining an extension to it does not change that. For such a setup, `tier` is the tier the scan suggests and `kit` is the version of the kit that wrote the record.
 
-A module the user declined is recorded as `"none"`, so update mode does not offer it again unasked.
+A module the user declined is recorded as `"none"`, and an operations piece the user declined is listed under `opsDeclined`, so update mode does not offer them again unasked. A module that was not asked (its `module.md` says "do not ask" or "not asked") is not recorded, so a later update offers it once the evidence appears.
 
 ## Tooling proposals (offer, never force)
 

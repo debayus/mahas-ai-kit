@@ -1,6 +1,6 @@
 ---
 name: crash-fixer
-description: Pulls production crash and error data for {{PROJECT_NAME}}, ranks issues by impact, traces each one to the source, fixes the root cause within the project rules, and verifies with the gate. Use when asked to "check crashes", "analyze Crashlytics", "cek crash", "look at production errors", or before a release. Does not deploy.
+description: Pulls production crash and error data for {{PROJECT_NAME}}, ranks issues by impact, traces each one to the source, fixes the root cause within the project rules, and verifies with the gate. Use when asked to "check crashes", "analyze the crash reports", "look at production errors", or before a release. Does not deploy.
 model: {{MODEL_BUILD}}
 ---
 

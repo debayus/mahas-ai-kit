@@ -28,7 +28,7 @@ Then in each project:
 ```
 /mahas-ai-kit:setup            # analyze, show the plan, wait for approval, then generate
 /mahas-ai-kit:setup --dry-run  # analysis and plan only
-/mahas-ai-kit:setup --lite     # force the light version
+/mahas-ai-kit:setup --lite     # force the light version (--full forces the largest)
 /mahas-ai-kit:setup --no-pipeline  # knowledge about the repo only; keep your own way of working
 /mahas-ai-kit:setup --add ticket  # add one module to an existing setup
 /mahas-ai-kit:setup --update   # check an existing setup against the current code; adopts a hand-made setup without renaming it

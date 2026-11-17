@@ -47,7 +47,6 @@ Ask a follow-up only when the code cannot answer it:
 
 ## Rules
 
-- A user who declines the module is recorded as `"none"` in `kit.json`; nothing is generated and `/pipeline` step 3 keeps a plain commit instruction.
-
+- A user who declines the module is recorded as `"none"` in `kit.json`; nothing is generated. In `/pipeline`, step 3 becomes "Commit the approved change, with a message in the style of the recent history." and step 4 becomes "Do not push or merge on your own."
 - Never record a standing permission to merge or push that the user did not give in this setup session.
 - `/pipeline` step 3 points at `process-git-delivery`; with option `pr` its last step offers `/pr` instead of a push command.

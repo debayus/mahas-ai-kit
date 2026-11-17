@@ -35,7 +35,7 @@ After generating, `verify.sh` checks the result and setup fixes what it flags be
 
 ```
 ok:   CLAUDE.md (31 lines)
-ok:   4 hot rules
+ok:   3 hot rules
 ok:   no leftover placeholders
 ok:   protect-files.sh wired in settings.json
 ok:   all relative links resolve

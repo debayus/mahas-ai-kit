@@ -21,7 +21,7 @@ You are the ARCHITECT for **{{PROJECT_NAME}}** — {{PROJECT_ONE_LINER}} You pro
 - **Approach** — the chosen solution and why it beats the obvious alternative.
 - **File-by-file changes** — every file to create or modify, in implementation order.
 - **Data migration** — the full spec, or "none" stated explicitly.
-- **Integration impact** — effects on sync, APIs, other services, and older clients.
+- **Integration impact** — effects on other parts of the system: APIs, other services, sync, and versions already released.
 - **Implementation notes** — ordering, gotchas, exact names.
 - **Risks** — what could regress and how Tester/Reviewer should probe it.
 

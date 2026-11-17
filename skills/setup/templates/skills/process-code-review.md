@@ -20,7 +20,7 @@ description: Review checklist, noise rules, and APPROVED/CHANGES_REQUIRED verdic
 | Regression | Callers/consumers of every modified symbol; changed defaults |
 | Project invariants | {{INVARIANTS_CHECK}} |
 | Security | Data leaking across role/tenant boundaries, injection, secrets in code or logs |
-| Performance | Repeated queries in loops, unindexed lookups, needless re-renders, blocking I/O |
+| Performance | Repeated queries in loops, unindexed lookups, repeated work on a hot path, blocking I/O |
 | Maintainability | Duplication of existing components, naming, dead code, test quality |
 
 ## Noise rules (keep review loops short)

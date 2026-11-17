@@ -4,13 +4,15 @@
 |---|---|
 | `CLAUDE.md` | At most 40 lines: what the project is, its hard rules, commands proven to run |
 | `.claude/.agent/` | Deep docs; the only place project knowledge is written down |
-| `.claude/skills/stack-*` | At most 3–4 skills that only point into the docs |
+| `.claude/skills/stack-*` | At most 3–4 skills: short rules, each linking into the docs |
 | `.claude/agents/` | planner, architect, developer, tester, reviewer; plus `test-gap`, deployers, and crash-fixer when chosen and the evidence is there |
 | `.claude/commands/` | `/plan`, `/pipeline`, `/test`, `/review-changes`; plus deploy and crash commands when the evidence is there |
 | `.claude/skills/process-*` | Planning, design, and review rules; git delivery, ticket, and database rules for the options you chose |
 | `.claude/kit.json` | What was generated and which options were chosen; read by `--update` and `--add` |
 | `.claude/workflows/` | The pipeline with loop caps (4 test rounds, 3 review rounds) |
 | `.claude/hooks/` | Auto-format after edits; block edits to protected files |
+| `.claude/settings.json` | The hook entries, merged into the file if it exists |
+| `.claude/README.md` | A short map of the setup, the choices made, and what is not verified yet |
 
 ## Commands after setup
 

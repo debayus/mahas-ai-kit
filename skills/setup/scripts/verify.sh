@@ -35,7 +35,7 @@ if [ -f CLAUDE.md ]; then
 fi
 
 # 1. no leftover placeholders
-left=$(grep -rnE '\{\{[A-Z_]+\}\}' $SCOPE --exclude='._*' --include='*.md' --include='*.js' --include='*.json' --include='*.sh' 2>/dev/null)
+left=$(grep -rnE '\{\{[A-Z][A-Z0-9_]*\}\}' $SCOPE --exclude='._*' --include='*.md' --include='*.js' --include='*.json' --include='*.sh' 2>/dev/null)
 [ -z "$left" ] && ok "no leftover placeholders" || { bad "leftover placeholders:"; echo "$left" | head -20; }
 
 # 2. frontmatter + size limits
@@ -54,7 +54,7 @@ for f in .claude/skills/*/SKILL.md; do [ -e "$f" ] || continue
 done
 for f in .claude/commands/*.md; do [ -e "$f" ] || continue; limit "$f" 30; done
 n=$(ls -d .claude/skills/stack-* 2>/dev/null | wc -l | tr -d ' ')
-[ "$n" -le 4 ] && ok "$n stack skills" || bad "$n stack skills (max 4)"
+if [ "$n" -le 4 ]; then ok "$n stack skills"; else soft "$n stack skills (max 4)"; fi
 
 # 2b. kit record, option markers, skill cap
 if [ -f .claude/kit.json ] && grep -qE '"kit": *"[0-9]+\.[0-9]+\.[0-9]+"' .claude/kit.json; then ok "kit record present"
@@ -78,6 +78,7 @@ for f in .claude/workflows/*.js; do [ -e "$f" ] || continue
   if grep -q "agentType: 'planner'" "$f"; then ok "$f present"
   elif [ "$EXISTING" -eq 1 ]; then ok "$f present (not a kit pipeline)"
   else bad "$f looks incomplete"; fi
+  if command -v node >/dev/null 2>&1; then node -e 'const s=require("fs").readFileSync(process.argv[1],"utf8").replace(/^export /gm,""); new (Object.getPrototypeOf(async function(){}).constructor)(s)' "$f" 2>/dev/null || bad "$f has a JavaScript syntax error (an unescaped quote in a command?)"; fi
 done
 
 # 5. hooks executable and wired
@@ -88,6 +89,8 @@ for f in .claude/hooks/*.sh; do [ -e "$f" ] || continue
   h=$(basename "$f"); case "$h" in _*) continue ;; esac   # _*.sh are helpers sourced by the hooks
   grep -q "$h" .claude/settings.json 2>/dev/null && ok "$h wired in settings.json" || bad "$h exists but is not wired in .claude/settings.json"
 done
+
+if ls .claude/hooks/*.sh >/dev/null 2>&1 && [ ! -f .claude/hooks/_file-path.sh ]; then bad ".claude/hooks/_file-path.sh is missing: without it the hooks do nothing"; fi
 
 # 6. relative Markdown links resolve
 broken=0
@@ -120,7 +123,7 @@ done
 
 # 7c. MCP tools that are named: is their server in .mcp.json? A server may also be connected
 # at user level, which this script cannot see, so this is a warning in every mode.
-for m in $(grep -rhoE 'mcp__[A-Za-z0-9-]+__' .claude/agents .claude/commands .claude/skills 2>/dev/null | sed -E 's/^mcp__//; s/__$//' | sort -u); do
+for m in $(grep -rhoE 'mcp__[A-Za-z0-9-]+(_[A-Za-z0-9-]+)*__' .claude/agents .claude/commands .claude/skills 2>/dev/null | sed -E 's/^mcp__//; s/__$//' | sort -u); do
   if [ -f .mcp.json ] && grep -qE "\"$m\" *:" .mcp.json; then ok "MCP server '$m' is in .mcp.json"
   else warn "tools of MCP server '$m' are named, but '$m' is not in .mcp.json — fine only if it is connected at user level"; fi
 done

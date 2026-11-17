@@ -1,6 +1,6 @@
 ---
 name: process-tech-design
-description: Technical-design template and checklist for the Architect stage — approach, file-by-file changes, data migration, integration impact, risks. Load when producing or evaluating a technical design for {{PROJECT_NAME}}.
+description: Technical-design template and checklist for the Architect stage — approach, file-by-file changes, data migration, risks. Load when producing or evaluating a technical design for {{PROJECT_NAME}}.
 ---
 
 # Technical design template — {{PROJECT_NAME}}

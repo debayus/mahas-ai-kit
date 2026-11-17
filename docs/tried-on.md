@@ -11,6 +11,6 @@ The kit is young. This is what has actually been run, so you can judge how far t
 | Astro static site | yes | no |
 | Next.js, Django, FastAPI, Go, Rust, .NET | fixtures only, or not at all | no |
 
-A dry-run follows every step up to the plan and checks it against `verify.sh`; it stops before writing files. Each of these runs turned up defects. The ones that could be reproduced are fixed and covered by `tests/run.sh`. Expect more on a stack that is not listed: start with `--dry-run`, and please report what looks wrong.
+A dry-run follows every step up to the plan and stops before writing files. Each of these runs turned up defects. The ones that could be reproduced are fixed and covered by `tests/run.sh`. Expect more on a stack that is not listed: start with `--dry-run`, and please report what looks wrong.
 
 [Back to the README](../README.md)

@@ -1,6 +1,6 @@
 ---
 name: playstore-deployer
-description: Builds and uploads the Android app ({{PROJECT_NAME}}) to Google Play — signed AAB → upload via fastlane supply. Use when asked to "deploy to play store", "ship android", "upload ke play store", "rilis ke playstore". It PUBLISHES a release to Google Play; being invoked is the authorization to upload. Edits only the version line — no other code changes.
+description: Builds and uploads the Android app ({{PROJECT_NAME}}) to Google Play — signed AAB → upload via fastlane supply. Use when asked to "deploy to play store", "ship android", "upload to Play Store", "release to Play Store". It PUBLISHES a release to Google Play; being invoked is the authorization to upload. Edits only the version line — no other code changes.
 tools: Bash, Read, Edit
 model: inherit
 ---

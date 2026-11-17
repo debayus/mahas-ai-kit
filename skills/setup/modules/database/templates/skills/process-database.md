@@ -19,7 +19,7 @@ description: Database rules for {{PROJECT_NAME}} — which database and environm
 - Read the schema source first. Do not guess a table, column, or field name.
 - A change is always a new migration: {{DB_MIGRATION_NEW}}
 - Never edit or delete a migration that has been applied. The protected-paths hook blocks it; if it blocks you, write a new migration that corrects the old one.
-- Every migration must be safe for rows that already exist: a new required column needs a default or a backfill in the same migration, and a rename or type change must keep the app version now in users' hands working.
+- Every migration must be safe for rows that already exist: a new required column needs a default or a backfill in the same migration, and a rename or type change must keep the code that is live now working until the new code is released.
 - Say in your report whether the change can be undone, and what data is lost if it is.
 - {{DB_MIGRATION_CHECK}}
 <!-- option: supabase -->

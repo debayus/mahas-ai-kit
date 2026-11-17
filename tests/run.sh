@@ -42,9 +42,10 @@ build db-firebase-files   --modules git-flow,database --options branch,firebase
 build db-sql-files        --modules database --options sql
 build protect-only        --modules git-flow --options branch --no-format
 build lite                --tier lite
+build lite-testing        --tier lite --modules testing
 build knowledge-only      --no-pipeline --modules ticket,database --options supabase
 build everything          --modules git-flow,ticket,testing,database --options pr,golden,e2e,load,coverage,supabase,firebase,read
-for s in standard-direct standard-branch standard-pr-ticket testing-existing testing-extended db-supabase-read db-firebase-files db-sql-files protect-only lite knowledge-only everything; do
+for s in standard-direct standard-branch standard-pr-ticket testing-existing testing-extended db-supabase-read db-firebase-files db-sql-files protect-only lite lite-testing knowledge-only everything; do
   expect_pass "$s"
 done
 
@@ -52,6 +53,14 @@ echo "## verify.sh rejects a broken setup"
 bad() { build "$1" --modules git-flow --options branch; }
 bad bad-placeholder; echo 'Uses {{TEST_CMD}} here.' >> "$TMP/bad-placeholder/CLAUDE.md"
 expect_fail bad-placeholder "leftover placeholders"
+bad bad-placeholder-digit; echo 'Uses {{E2E_CMD}} here.' >> "$TMP/bad-placeholder-digit/CLAUDE.md"
+expect_fail bad-placeholder-digit "leftover placeholders"
+bad bad-helper; rm "$TMP/bad-helper/.claude/hooks/_file-path.sh"
+expect_fail bad-helper "_file-path.sh is missing"
+if command -v node >/dev/null 2>&1; then
+  bad bad-workflow; echo "const x = 'it's broken';" >> "$TMP/bad-workflow/.claude/workflows/engineer-pipeline.js"
+  expect_fail bad-workflow "JavaScript syntax error"
+fi
 bad bad-marker; printf '<!-- option: pr -->\nx\n<!-- /option -->\n' >> "$TMP/bad-marker/.claude/commands/plan.md"
 expect_fail bad-marker "leftover option markers"
 bad bad-hook; printf '#!/usr/bin/env bash\nexit 0\n' > "$TMP/bad-hook/.claude/hooks/extra.sh"; chmod +x "$TMP/bad-hook/.claude/hooks/extra.sh"
@@ -87,11 +96,13 @@ expect_fail bad-agent "agent 'deployer' is named"
 
 echo "## verify.sh does not flag what is fine"
 bad fine-refs
-{ echo 'Run `flutter analyze`/build first, use `/clear` after, and see `/lib` for sources.'; echo 'Use `mcp__trello__get_card` to read the card.'; } >> "$TMP/fine-refs/.claude/commands/plan.md"
+{ echo 'Run `flutter analyze`/build first, use `/clear` after, and see `/lib` for sources.'; echo 'Use `mcp__trello__get_card` and `mcp__my_server__get_x` to read the card.'; } >> "$TMP/fine-refs/.claude/commands/plan.md"
 mkdir -p "$TMP/fine-refs/lib" "$TMP/fine-refs/.claude/worktrees/x"; echo 'Leftover {{TEST_CMD}} in another checkout.' > "$TMP/fine-refs/.claude/worktrees/x/CLAUDE.md"
 expect_pass fine-refs
 out=$(cd "$TMP/fine-refs" && bash "$VERIFY" 2>&1)
 printf '%s\n' "$out" | grep -q "MCP server 'trello' are named" && yes "an MCP server missing from .mcp.json is a warning" || no "an MCP server missing from .mcp.json is a warning" "$(printf '%s\n' "$out" | grep -i mcp)"
+
+printf '%s\n' "$out" | grep -q "MCP server 'my_server' are named" && yes "an MCP server name with an underscore is recognised" || no "an MCP server name with an underscore is recognised" "$(printf '%s\n' "$out" | grep -i mcp)"
 
 echo "## --existing turns size and record problems into warnings"
 expect_pass no-record --existing
@@ -126,6 +137,23 @@ allowed "new file in a folder that does not exist yet" "$H/lib/new/deep/file.dar
 N="$TMP/hook-nogit"; mkdir -p "$N/.claude/hooks" && cp "$KIT"/skills/setup/templates/hooks/*.sh "$N/.claude/hooks/" && echo '.env' > "$N/.claude/hooks/protected-paths.txt" && ln -s "$N" "$TMP/hook-link"
 r=$(printf '{"tool_input":{"file_path":"%s"}}' "$TMP/hook-link/.env" | CLAUDE_PROJECT_DIR="$N" bash "$N/.claude/hooks/protect-files.sh" 2>/dev/null; echo $?)
 [ "$r" = 2 ] && yes "blocked: protected file reached through a symlink, no git" || no "should be blocked: protected file reached through a symlink, no git"
+
+# Paths spelled in other ways must not get past the hook.
+touch "$H/pubspec.lock"; ln -s pubspec.lock "$H/alias.lock"
+printf '  .env  \n**/*.g.dart\n' >> "$H/.claude/hooks/protected-paths.txt"
+blocked "\"..\" through a folder that does not exist" "$H/nope/../pubspec.lock"
+blocked "a relative path" "pubspec.lock"
+blocked "a doubled slash" "$H//pubspec.lock"
+blocked "another letter case" "$H/PUBSPEC.LOCK"
+blocked "a symlink to a protected file" "$H/alias.lock"
+blocked "a pattern written with spaces around it" "$H/.env"
+blocked "a **/ pattern at the root" "$H/foo.g.dart"
+blocked "a **/ pattern in a subfolder" "$H/lib/a/foo.g.dart"
+allowed "a file whose name only contains a protected name" "$H/lib/pubspec.lock.md"
+# The project is a subfolder of a larger repository.
+M="$TMP/hook-mono"; mkdir -p "$M/apps/web/.claude/hooks" && (cd "$M" && git init -q -b main .) && cp "$KIT"/skills/setup/templates/hooks/*.sh "$M/apps/web/.claude/hooks/" && echo 'package-lock.json' > "$M/apps/web/.claude/hooks/protected-paths.txt"
+r=$(printf '{"tool_input":{"file_path":"%s"}}' "$M/apps/web/package-lock.json" | CLAUDE_PROJECT_DIR="$M/apps/web" bash "$M/apps/web/.claude/hooks/protect-files.sh" 2>/dev/null; echo $?)
+[ "$r" = 2 ] && yes "blocked: protected file when the project is a subfolder of a larger repository" || no "should be blocked: protected file when the project is a subfolder of a larger repository"
 
 # --- detect.sh on small repositories ---------------------------------------------------
 
@@ -191,6 +219,7 @@ hasnt "a library named only in a comment is not listed" "drift"
 has "supabase migrations are found" "supabase migrations: ./supabase/migrations/ (1 files" "supabase"
 has "a .claude folder without agents, skills, or commands is a fresh setup" "treat as a fresh setup" "claude"
 has "a tracked .env is flagged" "TRACKED IN GIT" "env"
+hasnt "the value inside .env is never printed" "SECRET=x"
 has "\"whenever\" and \"perpanjangan\" are not invariant markers" "- 0 lines (text" "lines"
 
 echo "## detect.sh: ticket evidence and folders without git"
@@ -267,6 +296,32 @@ has "Firestore used in code is reported" "Firestore or Realtime Database used in
 has "the package.json version is listed under release signals" "- ./package.json:3: \"version\": \"1.2.3\"" "version"
 has "a deploy done by CI is listed under release signals" "- deploy in CI:" "deploy"
 has "firebase.json alone is not called a database" "not by itself a database" "firebase.json"
+
+echo "## detect.sh: secrets in scripts, env files, release scripts"
+repo r-secrets
+cat > package.json <<'EOF'
+{
+  "name": "x",
+  "scripts": {
+    "deploy": "VERCEL_TOKEN=tok_abc123 vercel deploy",
+    "maps": "sentry-cli --auth-token sntrys_abc123 upload"
+  }
+}
+EOF
+mkdir -p tools src "my app" prisma && echo 'echo release' > tools/release.sh && echo "export const a = 1" > "src/it's.ts"
+printf 'generator client {\n  provider = "prisma-client-js"\n}\ndatasource db {\n  provider = "postgresql"\n}\n' > prisma/schema.prisma
+echo 'A=1' > .env.production; echo 'A=' > .env.example; echo '/.env' > .gitignore
+git add -A && commit "feat: tool"
+OUT=$(scan)
+hasnt "a token in a package.json script is not printed" "tok_abc123"
+hasnt "a token passed as a flag is not printed" "sntrys_abc123"
+has "the script itself is still listed" "VERCEL_TOKEN=<redacted> vercel deploy" "deploy"
+has "a tracked .env.production is flagged" ".env.production" "TRACKED"
+hasnt "a tracked .env.example is not flagged" "TRACKED IN GIT (values not read; ask the user whether this is intended): .env.example"
+has "/.env in .gitignore counts as ignored" ".env ignored by git: yes" "ignored"
+has "a release script in tools/ is listed" "- script: tools/release.sh" "script"
+has "a file name with an apostrophe does not empty the list" "it's.ts" "Largest"
+has "the Prisma provider is read from the datasource block" "postgresql" "prisma"
 
 echo
 echo "$pass passed, $failed failed"

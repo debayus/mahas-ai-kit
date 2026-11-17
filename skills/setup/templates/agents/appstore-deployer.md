@@ -1,6 +1,6 @@
 ---
 name: appstore-deployer
-description: Builds and uploads the iOS app ({{PROJECT_NAME}}) to App Store Connect — archive → validate → upload. Use when asked to "deploy to app store", "ship iOS", "upload build ke app store", "rilis ke appstore". It PUBLISHES a build to Apple (hard to reverse); being invoked is the authorization to upload. Edits only the version line — no other code changes.
+description: Builds and uploads the iOS app ({{PROJECT_NAME}}) to App Store Connect — archive → validate → upload. Use when asked to "deploy to app store", "ship iOS", "upload the build to the App Store", "release to the App Store". It PUBLISHES a build to Apple (hard to reverse); being invoked is the authorization to upload. Edits only the version line — no other code changes.
 tools: Bash, Read, Edit
 model: inherit
 ---

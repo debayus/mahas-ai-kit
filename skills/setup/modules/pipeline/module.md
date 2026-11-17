@@ -9,6 +9,8 @@ Decides whether the kit generates its own way of working (Planner → Architect 
 | `kit` | The kit's pipeline, sized by the tier | the agents, process skills, commands, and workflow of the tier |
 | `none` | Knowledge layer only | `CLAUDE.md`, the deep docs, the stack skills, the hooks, `.claude/README.md`, `kit.json`. No agent, no process skill, no command, no workflow |
 
+A third value, `own`, is never offered: update mode records it for a pipeline the project made itself (see Rules).
+
 This module has no templates of its own: it switches the core templates on or off.
 
 ## Recommendation (scan section "Existing Claude setup", and this session's skills)

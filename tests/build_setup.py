@@ -50,7 +50,7 @@ def resolve(text, keep):
 
 
 def fill(text):
-    return re.sub(r'\{\{([A-Z_]+)\}\}', lambda m: VALUES.get(m.group(1), 'stub value'), text)
+    return re.sub(r'\{\{([A-Z][A-Z0-9_]*)\}\}', lambda m: VALUES.get(m.group(1), 'stub value'), text)
 
 
 def listing(folder):

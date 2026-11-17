@@ -1,5 +1,5 @@
 # One glob per line, relative to the project root. Setup fills this from the code.
 # Examples:
-# supabase/migrations/2024*.sql
-# **/*.g.dart
-# pubspec.lock
+# db/migrations/2024*.sql
+# *.generated.ts
+# package-lock.json

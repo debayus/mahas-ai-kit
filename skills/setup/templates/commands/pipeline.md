@@ -1,5 +1,5 @@
 ---
-description: Run the full pipeline — Planner → Architect → Developer → Tester → Reviewer until APPROVED, then commit and prepare a PR
+description: Run the full pipeline — Planner → Architect → Developer → Tester → Reviewer until APPROVED, then commit
 argument-hint: "<requirement or task description> [--e2e]"
 allowed-tools: Workflow, TaskOutput, TaskStop, Bash, Read, Grep, Glob, Task, AskUserQuestion
 ---

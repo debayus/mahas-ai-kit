@@ -25,17 +25,22 @@ lk=""; for m in package-lock.json pnpm-lock.yaml yarn.lock bun.lockb bun.lock pu
 [ -d functions ] && echo "- functions/"
 
 # App root = the folder that holds the main manifest. It is not always the repo root.
+# Values that follow a secret-looking name are never printed (scripts and CI lines may hold them).
+redact() { sed -E 's/([A-Za-z0-9_]*(TOKEN|SECRET|KEY|PASSWORD|PASSWD|AUTH|token|secret|key|password|passwd|auth)[A-Za-z0-9_]*=)[^ "]+/\1<redacted>/g; s/(--?[A-Za-z-]*(token|secret|key|password|passwd|auth)[A-Za-z-]*[ =])[^ "]+/\1<redacted>/g'; }
+
 sec "App root"
 NESTED=$(find . -maxdepth 3 \( $PRUNE -o -name android -o -name ios -o -name macos -o -name linux -o -name windows \) -prune -o -type f \( -name pubspec.yaml -o -name package.json -o -name pyproject.toml -o -name go.mod -o -name Cargo.toml \) -print 2>/dev/null | sed 's|^\./||' | grep / | sort | head -12)
 APP=.
 if [ "$ROOT_HAS" -eq 0 ] && [ -n "$NESTED" ]; then
   best=-1
-  for m in $NESTED; do
+  while IFS= read -r m; do
     d=$(dirname "$m")
     # shellcheck disable=SC2086
     n=$(set -f; find "$d" \( $PRUNE \) -prune -o -type f \( $CODE_EXT \) -print 2>/dev/null | wc -l | tr -d ' ')
     [ "$n" -gt "$best" ] && { best=$n; APP=$d; }
-  done
+  done <<EOF
+$NESTED
+EOF
 fi
 if [ "$APP" = . ]; then
   [ "$ROOT_HAS" -eq 1 ] && echo "- primary app root: . (the repository root)" || echo "- no manifest found at the root or two levels below it"
@@ -63,7 +68,7 @@ sec "Top-level folders"
 ls -d */ 2>/dev/null | grep -vE '^(node_modules|dist|build|coverage)/$' | tr '\n' ' '; echo
 
 sec "Largest source files"
-(set -f; ff \( $CODE_EXT \)) | grep -vE '(^|/)(test|tests|__tests__|integration_test|spec)/|_test\.|\.test\.|\.spec\.|(^|/)test_[^/]*$|\.g\.dart$|\.freezed\.dart$|\.d\.ts$|\.min\.js$' | xargs wc -l 2>/dev/null | grep -v ' total$' | sort -rn | head -5
+(set -f; ff \( $CODE_EXT \)) | grep -vE '(^|/)(test|tests|__tests__|integration_test|spec)/|_test\.|\.test\.|\.spec\.|(^|/)test_[^/]*$|\.g\.dart$|\.freezed\.dart$|\.d\.ts$|\.min\.js$' | tr '\n' '\0' | xargs -0 wc -l 2>/dev/null | grep -vE ' total$|^ *0$' | sort -rn | head -5
 
 sec "Dependencies of interest"
 if [ -f "$APP/pubspec.yaml" ]; then
@@ -72,7 +77,7 @@ if [ -f "$APP/pubspec.yaml" ]; then
 fi
 if [ -f "$APP/package.json" ]; then
   grep -nE '"(react|next|vue|nuxt|svelte|@sveltejs/kit|astro|@angular/core|vite|express|fastify|hono|nestjs|@nestjs/core|electron|tailwindcss|@modelcontextprotocol/sdk|@anthropic-ai/sdk|openai|zod|prisma|@prisma/client|drizzle-orm|typeorm|@supabase/supabase-js|firebase|firebase-admin|@sentry/[a-z-]+|jest|vitest|playwright|@playwright/test|cypress|eslint|prettier|typescript)"' "$APP/package.json" | sed 's/^/- /'
-  echo "- scripts:"; sed -n '/"scripts"/,/}/p' "$APP/package.json" | head -25 | cut -c1-160
+  echo "- scripts:"; sed -n '/"scripts"/,/}/p' "$APP/package.json" | head -25 | cut -c1-160 | redact
 fi
 for m in pyproject.toml requirements.txt; do
   [ -f "$APP/$m" ] && grep -niE '(django|fastapi|flask|starlette|sqlalchemy|alembic|celery|pydantic|sentry|pytest|ruff|black|mypy|pyright|gdtoolkit)' "$APP/$m" | head -12 | sed "s|^|- $m:|"
@@ -93,7 +98,7 @@ AO="$APP/analysis_options.yaml"
 if [ -d .github/workflows ]; then
   for w in .github/workflows/*.y*ml; do
     [ -e "$w" ] || continue
-    echo "- CI $w:"; grep -nE '^\s*-?\s*run:|^\s*-?\s*uses:.*(deploy|hosting|pages|vercel|netlify|upload-google-play|testflight)|^\s*branches:|channelId:' "$w" | head -14 | cut -c1-150 | sed 's/^/    /'
+    echo "- CI $w:"; grep -nE '^\s*-?\s*run:|^\s*-?\s*uses:.*(deploy|hosting|pages|vercel|netlify|upload-google-play|testflight)|^\s*branches:|channelId:' "$w" | head -14 | cut -c1-150 | redact | sed 's/^/    /'
   done
 fi
 
@@ -149,7 +154,7 @@ for r in . "$APP"; do
   mig "supabase migrations" "$r/supabase/migrations" '*.sql'
   [ -f "$r/supabase/config.toml" ] && dbl "supabase config: $r/supabase/config.toml"
   for f in firestore.rules firestore.indexes.json database.rules.json storage.rules; do [ -f "$r/$f" ] && dbl "firebase file: $r/$f"; done
-  if [ -f "$r/prisma/schema.prisma" ]; then dbl "prisma schema: $r/prisma/schema.prisma ($(grep -m1 -E '^\s*provider\s*=' "$r/prisma/schema.prisma" | grep -v prisma-client | tr -d ' ' | cut -c1-40))"; fi
+  if [ -f "$r/prisma/schema.prisma" ]; then dbl "prisma schema: $r/prisma/schema.prisma ($(awk '/^datasource/{on=1} on && /provider/{print; exit}' "$r/prisma/schema.prisma" | tr -d ' ' | cut -c1-40))"; fi
   mig "prisma migrations" "$r/prisma/migrations" 'migration.sql'
   for f in drizzle.config.ts drizzle.config.js knexfile.js knexfile.ts ormconfig.json alembic.ini flyway.conf liquibase.properties; do [ -f "$r/$f" ] && dbl "migration tool config: $r/$f"; done
   for d in drizzle migrations db/migrate db/migration db/migrations database/migrations alembic/versions src/migrations Migrations sql; do
@@ -158,8 +163,8 @@ for r in . "$APP"; do
   [ "$APP" = . ] && break
 done
 DJ=$(cd "$APP" && ff -path '*/migrations/0*.py' | wc -l | tr -d ' '); [ "$DJ" -gt 0 ] && dbl "django-style migrations: $DJ files"
-EF=$(cd "$APP" && ff -name '*.csproj' | xargs grep -lE 'EntityFrameworkCore|Microsoft\.Data\.SqlClient|System\.Data\.SqlClient|Npgsql|Dapper' 2>/dev/null | head -3 | tr '\n' ' '); [ -n "$EF" ] && dbl ".NET data access in: $EF"
-CS=$(cd "$APP" && ff \( -name 'appsettings*.json' -o -name 'web.config' -o -name 'Web.config' \) | xargs grep -liE 'ConnectionStrings|<connectionStrings' 2>/dev/null | head -4 | tr '\n' ' '); [ -n "$CS" ] && dbl "connection strings declared in (values not read): $CS"
+EF=$(cd "$APP" && ff -name '*.csproj' | tr '\n' '\0' | xargs -0 grep -lE 'EntityFrameworkCore|Microsoft\.Data\.SqlClient|System\.Data\.SqlClient|Npgsql|Dapper' 2>/dev/null | head -3 | tr '\n' ' '); [ -n "$EF" ] && dbl ".NET data access in: $EF"
+CS=$(cd "$APP" && ff \( -name 'appsettings*.json' -o -name 'web.config' -o -name 'Web.config' \) | tr '\n' '\0' | xargs -0 grep -liE 'ConnectionStrings|<connectionStrings' 2>/dev/null | head -4 | tr '\n' ' '); [ -n "$CS" ] && dbl "connection strings declared in (values not read): $CS"
 drv=""
 for m in "$APP/pubspec.yaml" "$APP/package.json" "$APP/pyproject.toml" "$APP/requirements.txt" "$APP/go.mod" "$APP/Cargo.toml" "$APP/composer.json" "$APP/Gemfile"; do
   [ -f "$m" ] && drv="$drv $(grep -vE '^[[:space:]]*(#|//)' "$m" | grep -oE '(^|[^A-Za-z0-9_-])(supabase_flutter|firebase_core|@supabase/supabase-js|supabase|cloud_firestore|firebase_database|firebase-admin|firebase|sqflite|drift|isar|hive|objectbox|realm|"pg"|postgres|psycopg[0-9]?|asyncpg|pgx|"mssql"|tedious|pyodbc|pymssql|go-mssqldb|mysql2?|pymysql|mongoose|mongodb|pymongo|redis|sqlalchemy|typeorm|sequelize|drizzle-orm|@prisma/client|knex|gorm|sqlx|diesel|better-sqlite3|sqlite3)([^A-Za-z0-9_-]|$)' | sed -E 's/^[^A-Za-z@]+//; s/[^A-Za-z0-9]+$//' | sort -u | tr '\n' ' ')"
@@ -187,9 +192,9 @@ for d in . "$APP"; do
   ls -a "$d" 2>/dev/null | grep -E '^\.env|key\.properties|service-account|adminsdk|\.jks$|\.keystore$' | sed "s|^|- $d/|"
   [ "$APP" = . ] && break
 done
-trk=$(git ls-files 2>/dev/null | grep -E '(^|/)(\.env(\.json)?|key\.properties|[^/]*service-account[^/]*\.json|[^/]*\.jks|[^/]*\.keystore)$' | head -5 | tr '\n' ' ')
+trk=$(git ls-files 2>/dev/null | grep -vE '\.(example|sample|template|dist)$' | grep -E '(^|/)(\.env(\.[A-Za-z0-9_.-]+)?|key\.properties|[^/]*service-account[^/]*\.json|[^/]*\.jks|[^/]*\.keystore)$' | head -5 | tr '\n' ' ')
 [ -n "$trk" ] && echo "- TRACKED IN GIT (values not read; ask the user whether this is intended): $trk"
-[ "$GIT" -eq 1 ] && [ -f .gitignore ] && { grep -qE '^\s*\.env' .gitignore && echo "- .env ignored by git: yes" || echo "- .env ignored by git: NO (check with the user before assuming this is a mistake)"; }
+[ "$GIT" -eq 1 ] && { git check-ignore -q --no-index .env 2>/dev/null && echo "- .env ignored by git: yes" || echo "- .env ignored by git: NO (check with the user before assuming this is a mistake)"; }
 
 sec "Invariant markers in code (count)"
 N=$(grep -rIiE '(^|[^A-Za-z])(NEVER|JANGAN|WAJIB|DO NOT|MUST NOT|HACK|WORKAROUND)([^A-Za-z]|$)' --exclude-dir=dist --include='*.dart' --include='*.ts' --include='*.tsx' --include='*.js' --include='*.jsx' --include='*.py' --include='*.go' --include='*.rs' --include='*.kt' --include='*.swift' --include='*.php' --include='*.gd' --include='*.cs' --include='*.java' --exclude='*.min.js' --exclude='._*' --exclude-dir=addons --exclude-dir=.venv --exclude-dir=venv --exclude-dir=.godot --exclude-dir=__pycache__ --exclude-dir=vendor --exclude-dir=target --exclude-dir=node_modules --exclude-dir=build --exclude-dir=.dart_tool --exclude-dir=.claude . 2>/dev/null | wc -l | tr -d ' ')
@@ -212,7 +217,7 @@ fi
 for d in fastlane "$APP/fastlane" "$APP/android/fastlane" "$APP/ios/fastlane"; do [ -d "$d" ] && echo "- fastlane folder: $d/"; done
 if [ -d "$APP/android" ] || [ -d "$APP/ios" ]; then command -v fastlane >/dev/null 2>&1 && echo "- fastlane CLI: installed" || echo "- fastlane CLI: not installed"; fi
 for m in "$APP/pubspec.yaml" "$APP/package.json" "$APP/pyproject.toml" "$APP/requirements.txt"; do
-  [ -f "$m" ] && grep -nE 'firebase_crashlytics|sentry|bugsnag' "$m" | head -2 | cut -c1-120 | sed "s|^|- crash SDK in $m:|"
+  [ -f "$m" ] && grep -nE 'firebase_crashlytics|sentry|bugsnag' "$m" | head -2 | cut -c1-120 | redact | sed "s|^|- crash SDK in $m:|"
 done
 if [ -f .mcp.json ] && command -v python3 >/dev/null 2>&1; then
   echo "- .mcp.json servers: $(python3 -c 'import json;print(", ".join(json.load(open(".mcp.json")).get("mcpServers",{}).keys()) or "none")' 2>/dev/null)"
@@ -221,7 +226,7 @@ fi
 [ -f export_presets.cfg ] && echo "- godot export presets: $(grep -E '^(name|platform)=' export_presets.cfg | sed -E 's/^[a-z]+="?//; s/"$//' | paste -sd' ' - | cut -c1-160)"
 for d in scripts tool tools ci tools/ci "$APP/scripts" "$APP/tool"; do
   [ -d "$d" ] && ls "$d" 2>/dev/null | grep -iE 'release|deploy|gate|build|check|lint|^ci' | grep -vE '\.(gd|uid|import)$' | head -6 | sed "s|^|- script: $d/|"
-  [ "$APP" = . ] && [ "$d" = tool ] && break
+  [ "$APP" = . ] && [ "$d" = tools/ci ] && break
 done
 [ -f "$APP/package.json" ] && grep -m1 -nE '^\s*"version":' "$APP/package.json" | tr -s ' ' | sed "s|^|- $APP/package.json:|"
 if [ -d .github/workflows ]; then

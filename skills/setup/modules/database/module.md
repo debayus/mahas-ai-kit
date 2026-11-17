@@ -16,7 +16,7 @@ Engines: `supabase` and `firebase` have been checked against real repos by the s
 
 Apply the first rule that matches and quote its evidence line in the question:
 
-1. "no database evidence found", or only on-device libraries, or Firebase without a "used in code" line (hosting, messaging, analytics only) → `none`. Do not ask.
+1. "no database evidence found", or only on-device libraries, or Firebase without a "used in code" line (hosting, messaging, analytics only) → `none`. Do not ask, and do not record it.
 2. A database server is listed in `.mcp.json`, or the engine's CLI is installed and the repo has its config (for example `supabase/config.toml` with the `supabase` CLI) → `read`.
 3. Migration files, rules files, or a schema file exist → `files`.
 4. Otherwise (a server-side database is used in code, but the repo holds no migration, rules, or schema file) → `none`, and still ask. Say in the plan that access rules live outside the repo and cannot be checked from it. Whatever the answer, record how the app reaches the database in `data-model.md`, or in `conventions.md` in tier lite.

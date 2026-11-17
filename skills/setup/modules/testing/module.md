@@ -23,7 +23,7 @@ Apply the first rule that matches and quote its evidence line in the question:
 
 "How far should testing go beyond the gate?" — options in recommended order. Then ask only what the choice needs:
 
-- `extended`: one multi-select of the levels the repo lacks (unit and component, integration, golden or snapshot, end-to-end, load or stress). Unit and component is always offerable: use the stack's standard runner, or ask which one if the stack has several. Offer another level only if its tool is in the manifest, or the user names the tool. A CLI that is merely installed on the machine does not make a level offerable.
+- `extended`: one multi-select of the levels the repo lacks (unit and component, integration, golden or snapshot, end-to-end, load or stress); a question holds at most four options, so with all five lacking, ask load or stress separately. Unit and component is always offerable: use the stack's standard runner, or ask which one if the stack has several. Offer another level only if its tool is in the manifest, or the user names the tool. A CLI that is merely installed on the machine does not make a level offerable.
 - Coverage floor. CI already enforces one (a `--min`, `fail_under`, or threshold in the scan's CI lines) → write that figure and its source as the floor and do not ask. Otherwise ask only when the repo defines a coverage command and you ran it in Step 2: "Keep coverage from dropping below today's figure (N%)?" Default no. Do not run a coverage command just to be able to ask.
 - Load or stress chosen: which non-production host may be tested. No such host → record "none; scripts are written but not run".
 
@@ -43,7 +43,7 @@ Performance or benchmark tests the repo already has are not a level here: leave 
 
 | Placeholder | Fill with |
 |---|---|
-| `{{TEST_LEVELS}}` | One table row per level in scope: level, folder, the command that ran in Step 2 (or "unverified" if it needs a device, a browser, or a server), one existing test file to copy the pattern from. A level picked under `extended` has no pattern file: write "to start" and the tool |
+| Test levels table (no template; written straight into `testing.md`) | One table row per level in scope: level, folder, the command that ran in Step 2 (or "unverified" if it needs a device, a browser, or a server), one existing test file to copy the pattern from. A level picked under `extended` has no pattern file: write "to start" and the tool |
 | `{{TEST_FILE_RULE}}` | How a source file maps to its test file in this repo, read from existing pairs (for example `lib/a/b.dart` → `test/a/b_test.dart`) |
 | `{{GAP_SOURCES}}` | How gaps are found here, in order: the coverage command and its report path if it ran in Step 2; then source files with no test file under the rule above |
 | `{{COVERAGE_FLOOR}}` | The figure CI enforces, with the workflow file that sets it; otherwise the figure measured in Step 2 and the command that produced it. Declined or no coverage command → delete the line |
@@ -55,7 +55,6 @@ The "Test levels" section in `.claude/.agent/testing.md` is the only home for th
 
 - Record the option in `.claude/kit.json` under `modules`. The levels in scope live in `testing.md` only.
 - `{{TEST_GUIDE}}` and `{{TEST_CMD}}` are the kit-wide placeholders from `references/generation-rules.md`.
-
 - Resolve the option blocks in the templates by level, not by option: keep `<!-- option: golden -->`, `e2e`, `load`, and `coverage` blocks only for the levels in scope and for an accepted coverage floor.
 - A coverage floor is a figure CI already enforces or one measured in this session, never a target. Do not write a number that neither a workflow file nor a command in this session produced.
 - Do not add a test tool to the manifest during setup. A level under `extended` whose tool is missing is recorded as "to start"; the agent proposes the dependency on first use and waits for approval.
