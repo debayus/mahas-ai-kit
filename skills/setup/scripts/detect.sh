@@ -2,18 +2,25 @@
 # Deterministic repository scan. Prints a compact report for the setup skill.
 # Read-only. Run from the repository root.
 set -u
-PRUNE='-name .git -o -name .claude -o -name node_modules -o -name build -o -name dist -o -name .dart_tool -o -name Pods -o -name .gradle -o -name vendor -o -name target -o -name .next -o -name coverage -o -name .venv -o -name venv -o -name __pycache__ -o -name .idea -o -name .symlinks -o -name ephemeral -o -path ./functions/lib'
-ff() { find . \( $PRUNE \) -prune -o -type f "$@" -print 2>/dev/null; }
+PRUNE='-name .git -o -name .claude -o -name node_modules -o -name build -o -name dist -o -name .dart_tool -o -name Pods -o -name .gradle -o -name vendor -o -name target -o -name .next -o -name coverage -o -name .venv -o -name venv -o -name __pycache__ -o -name .idea -o -name .symlinks -o -name ephemeral -o -path ./functions/lib -o -name .astro -o -name .svelte-kit -o -name .nuxt -o -name .output -o -name .turbo -o -name .godot'
+# Godot keeps third-party plugins in addons/.
+[ -f project.godot ] && PRUNE="$PRUNE -o -path ./addons"
+# ._* files are macOS metadata written on some drives, never source.
+ff() { find . \( $PRUNE \) -prune -o -type f ! -name '._*' "$@" -print 2>/dev/null; }
+GIT=0; git rev-parse --git-dir >/dev/null 2>&1 && GIT=1
 sec() { printf '\n## %s\n' "$1"; }
-CODE_EXT="-name *.dart -o -name *.ts -o -name *.tsx -o -name *.js -o -name *.py -o -name *.go -o -name *.rs -o -name *.kt -o -name *.swift -o -name *.php"
-MANIFESTS='pubspec.yaml package.json pyproject.toml requirements.txt go.mod Cargo.toml composer.json Gemfile build.gradle build.gradle.kts pom.xml Package.swift'
+CODE_EXT="-name *.dart -o -name *.ts -o -name *.tsx -o -name *.js -o -name *.jsx -o -name *.mjs -o -name *.cjs -o -name *.py -o -name *.go -o -name *.rs -o -name *.kt -o -name *.swift -o -name *.php -o -name *.gd -o -name *.cs -o -name *.java -o -name *.rb -o -name *.vue -o -name *.svelte -o -name *.astro"
+MANIFESTS='pubspec.yaml package.json pyproject.toml requirements.txt go.mod Cargo.toml composer.json Gemfile build.gradle build.gradle.kts pom.xml Package.swift project.godot'
 
 echo "# Repo scan: $(basename "$(pwd)")"
 
 sec "Manifests"
 ROOT_HAS=0
 for m in $MANIFESTS; do [ -e "$m" ] && { echo "- $m"; ROOT_HAS=1; }; done
-for m in Makefile melos.yaml firebase.json; do [ -e "$m" ] && echo "- $m"; done
+for m in *.sln *.csproj; do [ -e "$m" ] && { echo "- $m"; ROOT_HAS=1; }; done
+for m in Makefile melos.yaml firebase.json export_presets.cfg; do [ -e "$m" ] && echo "- $m"; done
+lk=""; for m in package-lock.json pnpm-lock.yaml yarn.lock bun.lockb bun.lock pubspec.lock poetry.lock uv.lock Pipfile.lock go.sum Cargo.lock composer.lock Gemfile.lock; do [ -e "$m" ] && lk="$lk $m"; done
+[ -n "$lk" ] && echo "- lockfiles:$lk"
 [ -d supabase ] && echo "- supabase/ ($(ls supabase/migrations 2>/dev/null | grep -c '\.sql$') migrations)"
 [ -d functions ] && echo "- functions/"
 
@@ -38,13 +45,14 @@ fi
 [ -n "$NESTED" ] && { echo "- nested manifests:"; echo "$NESTED" | sed 's/^/    /'; }
 
 sec "Source files by extension (top 8, generated and vendored folders excluded)"
-ff \( -name '*.dart' -o -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.jsx' -o -name '*.py' -o -name '*.go' -o -name '*.rs' -o -name '*.kt' -o -name '*.swift' -o -name '*.java' -o -name '*.php' -o -name '*.rb' -o -name '*.vue' -o -name '*.sql' \) \
+ff \( -name '*.dart' -o -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.jsx' -o -name '*.py' -o -name '*.go' -o -name '*.rs' -o -name '*.kt' -o -name '*.swift' -o -name '*.java' -o -name '*.php' -o -name '*.rb' -o -name '*.vue' -o -name '*.svelte' -o -name '*.astro' -o -name '*.gd' -o -name '*.cs' -o -name '*.sql' \) \
   | sed 's/.*\.//' | sort | uniq -c | sort -rn | head -8
 
 sec "Size"
-SRC=$(ff \( -name '*.dart' -o -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.py' -o -name '*.go' -o -name '*.rs' -o -name '*.kt' -o -name '*.swift' -o -name '*.php' \) | grep -vE '(^|/)(test|tests|__tests__|integration_test|spec)/|_test\.|\.test\.|\.spec\.|\.g\.dart$|\.freezed\.dart$' | wc -l | tr -d ' ')
-TEXT='\.(dart|ts|tsx|js|jsx|mjs|py|go|rs|kt|swift|php|rb)$'
-TST=$(ff \( -name '*_test.*' -o -name '*.test.*' -o -name '*.spec.*' -o -name 'test_*.py' \) | grep -cE "$TEXT")
+# shellcheck disable=SC2086
+SRC=$(set -f; ff \( $CODE_EXT \) | grep -vE '(^|/)(test|tests|__tests__|integration_test|spec)/|_test\.|\.test\.|\.spec\.|(^|/)test_[^/]*$|\.g\.dart$|\.freezed\.dart$|\.d\.ts$' | wc -l | tr -d ' ')
+TEXT='\.(dart|ts|tsx|js|jsx|mjs|py|go|rs|kt|swift|php|rb|gd|cs|java)$'
+TST=$(ff \( -name '*_test.*' -o -name '*.test.*' -o -name '*.spec.*' -o -name 'test_*.py' -o -name 'test_*.gd' \) | grep -cE "$TEXT")
 echo "- source files: $SRC"
 echo "- test files: $TST"
 if   [ "$SRC" -lt 40 ] || [ "$TST" -eq 0 ]; then echo "- suggested tier: lite (add single pieces from a higher tier if the code has shared data or several roles)"
@@ -55,7 +63,7 @@ sec "Top-level folders"
 ls -d */ 2>/dev/null | grep -vE '^(node_modules|dist|build|coverage)/$' | tr '\n' ' '; echo
 
 sec "Largest source files"
-ff \( -name '*.dart' -o -name '*.ts' -o -name '*.tsx' -o -name '*.py' -o -name '*.go' \) | grep -vE '(^|/)(test|tests|__tests__|integration_test|spec)/|_test\.|\.test\.|\.spec\.|\.g\.dart$|\.freezed\.dart$' | xargs wc -l 2>/dev/null | grep -v ' total$' | sort -rn | head -5
+(set -f; ff \( $CODE_EXT \)) | grep -vE '(^|/)(test|tests|__tests__|integration_test|spec)/|_test\.|\.test\.|\.spec\.|(^|/)test_[^/]*$|\.g\.dart$|\.freezed\.dart$|\.d\.ts$|\.min\.js$' | xargs wc -l 2>/dev/null | grep -v ' total$' | sort -rn | head -5
 
 sec "Dependencies of interest"
 if [ -f "$APP/pubspec.yaml" ]; then
@@ -63,13 +71,21 @@ if [ -f "$APP/pubspec.yaml" ]; then
   grep -nE '^\s*(sdk|flutter):\s*["^>=0-9]' "$APP/pubspec.yaml" | head -3 | sed 's/^/- /'
 fi
 if [ -f "$APP/package.json" ]; then
-  grep -nE '"(react|next|vue|nuxt|svelte|express|fastify|nestjs|@nestjs/core|prisma|@prisma/client|drizzle-orm|typeorm|@supabase/supabase-js|firebase|firebase-admin|@sentry/[a-z-]+|jest|vitest|playwright|@playwright/test|cypress|eslint|prettier|typescript)"' "$APP/package.json" | sed 's/^/- /'
+  grep -nE '"(react|next|vue|nuxt|svelte|@sveltejs/kit|astro|@angular/core|vite|express|fastify|hono|nestjs|@nestjs/core|electron|tailwindcss|@modelcontextprotocol/sdk|@anthropic-ai/sdk|openai|zod|prisma|@prisma/client|drizzle-orm|typeorm|@supabase/supabase-js|firebase|firebase-admin|@sentry/[a-z-]+|jest|vitest|playwright|@playwright/test|cypress|eslint|prettier|typescript)"' "$APP/package.json" | sed 's/^/- /'
   echo "- scripts:"; sed -n '/"scripts"/,/}/p' "$APP/package.json" | head -25 | cut -c1-160
 fi
-[ -f "$APP/pyproject.toml" ] && grep -nE '(django|fastapi|flask|sqlalchemy|alembic|sentry|pytest|ruff|black|mypy|pyright)' "$APP/pyproject.toml" | head -12 | sed 's/^/- /'
+for m in pyproject.toml requirements.txt; do
+  [ -f "$APP/$m" ] && grep -niE '(django|fastapi|flask|starlette|sqlalchemy|alembic|celery|pydantic|sentry|pytest|ruff|black|mypy|pyright|gdtoolkit)' "$APP/$m" | head -12 | sed "s|^|- $m:|"
+done
+[ -f "$APP/go.mod" ] && { grep -nE '^go [0-9]' "$APP/go.mod" | sed 's/^/- go.mod:/'; grep -nE '(gin-gonic/gin|labstack/echo|gofiber/fiber|go-chi/chi|gorm\.io|jmoiron/sqlx|jackc/pgx|stretchr/testify|getsentry)' "$APP/go.mod" | head -10 | sed 's/^/- go.mod:/'; }
+[ -f "$APP/Cargo.toml" ] && grep -nE '^(axum|actix-web|rocket|tokio|sqlx|diesel|serde|sentry)\b' "$APP/Cargo.toml" | head -10 | sed 's/^/- Cargo.toml:/'
+if [ -f project.godot ]; then
+  grep -nE '^config/(name|features)=' project.godot | cut -c1-120 | sed 's/^/- project.godot:/'
+  [ -d addons ] && echo "- godot addons: $(ls addons | tr '\n' ' ')"
+fi
 
 sec "Quality gates"
-for f in analysis_options.yaml .eslintrc .eslintrc.js .eslintrc.json eslint.config.js eslint.config.mjs .prettierrc .prettierrc.json tsconfig.json ruff.toml mypy.ini dart_test.yaml jest.config.js vitest.config.ts .pre-commit-config.yaml lefthook.yml; do
+for f in analysis_options.yaml .eslintrc .eslintrc.js .eslintrc.json eslint.config.js eslint.config.mjs .prettierrc .prettierrc.json tsconfig.json ruff.toml mypy.ini dart_test.yaml jest.config.js vitest.config.ts .pre-commit-config.yaml lefthook.yml gdlintrc .gdlintrc gdformatrc .golangci.yml .golangci.yaml rustfmt.toml clippy.toml pytest.ini tox.ini .editorconfig; do
   [ -e "$APP/$f" ] && echo "- ${APP#.}${APP:+/}$f" | sed 's|^- /|- |'
 done
 AO="$APP/analysis_options.yaml"
@@ -82,7 +98,7 @@ if [ -d .github/workflows ]; then
 fi
 
 sec "Tests"
-for d in test tests __tests__ integration_test e2e spec; do [ -d "$APP/$d" ] && echo "- $APP/$d/ ($(find "$APP/$d" -type f | wc -l | tr -d ' ') files)"; done
+for d in test tests __tests__ integration_test e2e spec; do [ -d "$APP/$d" ] && echo "- $APP/$d/ ($(find "$APP/$d" -type f ! -name '._*' ! -name '*.uid' ! -name '*.import' | wc -l | tr -d ' ') files)"; done
 for d in test/helpers test/fakes test/mocks tests/fixtures tests/helpers; do [ -d "$APP/$d" ] && echo "- helpers: $APP/$d/"; done
 [ "$TST" -eq 0 ] && echo "- no test files found"
 
@@ -90,12 +106,13 @@ for d in test/helpers test/fakes test/mocks tests/fixtures tests/helpers; do [ -
 sec "Test levels"
 tg() { grep -rIlE "$1" "$APP" --include='*.dart' --include='*.ts' --include='*.tsx' --include='*.js' --include='*.jsx' --include='*.py' --include='*.go' --exclude-dir=node_modules --exclude-dir=build --exclude-dir=dist --exclude-dir=.dart_tool --exclude-dir=.next --exclude-dir=.venv --exclude-dir=venv --exclude-dir=Pods 2>/dev/null | wc -l | tr -d ' '; }
 cnt() { wc -l | tr -d ' '; }
-ALLT=$(cd "$APP" && ff \( -name '*_test.*' -o -name '*.test.*' -o -name '*.spec.*' -o -name 'test_*.py' \) | grep -E "$TEXT")
+ALLT=$(cd "$APP" && ff \( -name '*_test.*' -o -name '*.test.*' -o -name '*.spec.*' -o -name 'test_*.py' -o -name 'test_*.gd' \) | grep -E "$TEXT")
 E2EP='(^|/)(e2e[^/]*|end-to-end|end_to_end|playwright|cypress|integration_test)/|[._]e2e[._]'
 E2EF=$(printf '%s\n' "$ALLT" | grep -cE "$E2EP")
 INTEG=$(printf '%s\n' "$ALLT" | grep -vE "$E2EP" | grep -cE '(^|/)(integration|integration_tests|it)/|[._]integration[._]|_integration_test\.')
 TOTAL=$(printf '%s\n' "$ALLT" | grep -c .)
-echo "- unit and component: $((TOTAL - INTEG - E2EF)) test files"
+byext=$(printf '%s\n' "$ALLT" | grep -vE "$E2EP" | grep -vE '(^|/)(integration|integration_tests|it)/|[._]integration[._]|_integration_test\.' | grep . | sed 's/.*\.//' | sort | uniq -c | sort -rn | awk '{printf "%s %s, ", $2, $1}' | sed 's/, $//')
+echo "- unit and component: $((TOTAL - INTEG - E2EF)) test files${byext:+ (by extension: $byext — more than one language means more than one runner)}"
 echo "- integration: $INTEG test files"
 GOLD=$(tg 'matchesGoldenFile|toMatchSnapshot|toMatchInlineSnapshot|toMatchImageSnapshot|toHaveScreenshot|assert_match_snapshot')
 GDIR=$(cd "$APP" && find . \( $PRUNE \) -prune -o -type d \( -name goldens -o -name __snapshots__ -o -name '__image_snapshots__' \) -print 2>/dev/null | cnt)
@@ -172,11 +189,11 @@ for d in . "$APP"; do
 done
 trk=$(git ls-files 2>/dev/null | grep -E '(^|/)(\.env(\.json)?|key\.properties|[^/]*service-account[^/]*\.json|[^/]*\.jks|[^/]*\.keystore)$' | head -5 | tr '\n' ' ')
 [ -n "$trk" ] && echo "- TRACKED IN GIT (values not read; ask the user whether this is intended): $trk"
-[ -f .gitignore ] && { grep -qE '^\s*\.env' .gitignore && echo "- .env ignored by git: yes" || echo "- .env ignored by git: NO (check with the user before assuming this is a mistake)"; }
+[ "$GIT" -eq 1 ] && [ -f .gitignore ] && { grep -qE '^\s*\.env' .gitignore && echo "- .env ignored by git: yes" || echo "- .env ignored by git: NO (check with the user before assuming this is a mistake)"; }
 
 sec "Invariant markers in code (count)"
-N=$(grep -rIiE '(^|[^A-Za-z])(NEVER|JANGAN|WAJIB|DO NOT|MUST NOT|HACK|WORKAROUND)([^A-Za-z]|$)' --exclude-dir=dist --include='*.dart' --include='*.ts' --include='*.tsx' --include='*.js' --include='*.jsx' --include='*.py' --include='*.go' --include='*.rs' --include='*.kt' --include='*.swift' --include='*.php' --exclude-dir=node_modules --exclude-dir=build --exclude-dir=.dart_tool --exclude-dir=.claude . 2>/dev/null | wc -l | tr -d ' ')
-echo "- $N lines; list them with: grep -rnIiwE '(NEVER|JANGAN|WAJIB|DO NOT|MUST NOT|HACK|WORKAROUND)' <src dir> | head -40"
+N=$(grep -rIiE '(^|[^A-Za-z])(NEVER|JANGAN|WAJIB|DO NOT|MUST NOT|HACK|WORKAROUND)([^A-Za-z]|$)' --exclude-dir=dist --include='*.dart' --include='*.ts' --include='*.tsx' --include='*.js' --include='*.jsx' --include='*.py' --include='*.go' --include='*.rs' --include='*.kt' --include='*.swift' --include='*.php' --include='*.gd' --include='*.cs' --include='*.java' --exclude='*.min.js' --exclude='._*' --exclude-dir=addons --exclude-dir=.venv --exclude-dir=venv --exclude-dir=.godot --exclude-dir=__pycache__ --exclude-dir=vendor --exclude-dir=target --exclude-dir=node_modules --exclude-dir=build --exclude-dir=.dart_tool --exclude-dir=.claude . 2>/dev/null | wc -l | tr -d ' ')
+echo "- $N lines (text inside prompts or messages can match too); list them with: grep -rnIiwE '(NEVER|JANGAN|WAJIB|DO NOT|MUST NOT|HACK|WORKAROUND)' <src dir> | head -40"
 
 # Evidence for the optional operations pieces (deploy, crash triage). Names and paths only.
 sec "Release and operations signals"
@@ -200,8 +217,10 @@ done
 if [ -f .mcp.json ] && command -v python3 >/dev/null 2>&1; then
   echo "- .mcp.json servers: $(python3 -c 'import json;print(", ".join(json.load(open(".mcp.json")).get("mcpServers",{}).keys()) or "none")' 2>/dev/null)"
 fi
-for d in scripts tool "$APP/scripts" "$APP/tool"; do
-  [ -d "$d" ] && ls "$d" 2>/dev/null | grep -iE 'release|deploy|gate|build' | head -6 | sed "s|^|- release script: $d/|"
+[ -f project.godot ] && grep -m1 -nE '^config/version=' project.godot | sed 's/^/- project.godot:/'
+[ -f export_presets.cfg ] && echo "- godot export presets: $(grep -E '^(name|platform)=' export_presets.cfg | sed -E 's/^[a-z]+="?//; s/"$//' | paste -sd' ' - | cut -c1-160)"
+for d in scripts tool tools ci tools/ci "$APP/scripts" "$APP/tool"; do
+  [ -d "$d" ] && ls "$d" 2>/dev/null | grep -iE 'release|deploy|gate|build|check|lint|^ci' | grep -vE '\.(gd|uid|import)$' | head -6 | sed "s|^|- script: $d/|"
   [ "$APP" = . ] && [ "$d" = tool ] && break
 done
 [ -f "$APP/package.json" ] && grep -m1 -nE '^\s*"version":' "$APP/package.json" | tr -s ' ' | sed "s|^|- $APP/package.json:|"
@@ -222,6 +241,8 @@ if [ -d .claude ]; then
   elif [ -d .claude/agents ] || [ -d .claude/skills ] || [ -d .claude/commands ]; then echo "- kit record: none (set up by hand or by an older kit — use the adoption rules in update mode)"
   else echo "- no agents, skills, or commands: treat as a fresh setup and keep the files already in .claude/"; fi
 else echo "- no .claude/ folder (fresh setup)"; fi
+wf=""; for d in .specify .bmad-core _bmad openspec; do [ -d "$d" ] && wf="$wf $d/"; done
+[ -n "$wf" ] && echo "- workflow framework folders:$wf (see the pipeline module)"
 
 sec "Git"
 if git rev-parse --git-dir >/dev/null 2>&1; then
@@ -250,14 +271,20 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
   subj=$(git log -200 --format='%s' 2>/dev/null)
   echo "- subjects with 'Trello #N': $(printf '%s\n' "$subj" | grep -ciE 'trello ?#[0-9]+')"
   keys=$(printf '%s\n' "$subj" | grep -oE '(^|[^A-Za-z0-9])[A-Z][A-Z0-9]{1,9}-[0-9]+' | sed -E 's/^[^A-Z]//; s/-[0-9]+$//' | sort | uniq -c | sort -rn | head -3 | awk '{printf "%s×%s ", $2, $1}')
-  echo "- subjects with a KEY-123 code: $(printf '%s\n' "$subj" | grep -cE '(^|[^A-Za-z0-9])[A-Z][A-Z0-9]{1,9}-[0-9]+')${keys:+ — keys: $keys}"
+  echo "- subjects with a KEY-123 code: $(printf '%s\n' "$subj" | grep -cE '(^|[^A-Za-z0-9])[A-Z][A-Z0-9]{1,9}-[0-9]+')${keys:+ — keys: $keys}$([ -n "$keys" ] && echo " (a key defined in the repo's own docs, such as a decision or requirement id, is not a ticket)")"
+  body=$(git log -200 --format='%b' 2>/dev/null)
+  echo "- tracker links in commit bodies: trello.com $(printf '%s\n' "$body" | grep -c 'trello\.com/c/'), atlassian.net $(printf '%s\n' "$body" | grep -c 'atlassian\.net/browse/'), github issues $(printf '%s\n' "$body" | grep -cE 'github\.com/[^ ]+/issues/[0-9]+'), linear.app $(printf '%s\n' "$body" | grep -c 'linear\.app/')"
   echo "- subjects with a bare #N (not Trello, not a PR merge): $(printf '%s\n' "$subj" | grep -viE 'trello ?#|^Merge pull request' | grep -cE '#[0-9]+')"
   # Branch names: live refs plus the names kept in merge subjects (merged branches are often deleted).
-  bn=$( { git for-each-ref --format='%(refname:short)' refs/heads refs/remotes 2>/dev/null | sed 's|^origin/||'; printf '%s\n' "$subj" | sed -nE "s/^Merge (remote-tracking )?branch '([^']+)'.*/\2/p"; } | sort -u)
+  bn=$( { git for-each-ref --format='%(refname:short)' refs/heads refs/remotes 2>/dev/null | sed 's|^origin/||'; printf '%s\n' "$subj" | sed -nE "s/^Merge (remote-tracking )?branch '([^']+)'.*/\2/p; s|^Merge pull request #[0-9]+ from [^/ ]+/(.+)$|\1|p" | sed 's|^origin/||'; } | grep -vxE 'main|master|develop|HEAD' | sort -u)
   echo "- branch names with a ticket code (live and merged): $(printf '%s\n' "$bn" | grep -cE '[A-Z][A-Z0-9]+-[0-9]+|/[0-9]+-|(^|/)[a-z]?[0-9]{3,}($|[-_/])')$(printf '%s\n' "$bn" | grep -E '[A-Z][A-Z0-9]+-[0-9]+|/[0-9]+-|(^|/)[a-z]?[0-9]{3,}($|[-_/])' | head -2 | tr '\n' ' ' | sed 's/^/ — for example: /')"
-  mpre=$(printf '%s\n' "$subj" | sed -nE "s/^Merge (remote-tracking )?branch '([^']+)'.*/\2/p" | grep / | cut -d/ -f1 | sort | uniq -c | sort -rn | head -5 | awk '{printf "%s/ (%s) ", $2, $1}')
+  mpre=$(printf '%s\n' "$subj" | sed -nE "s/^Merge (remote-tracking )?branch '([^']+)'.*/\2/p; s|^Merge pull request #[0-9]+ from [^/ ]+/(.+)$|\1|p" | sed 's|^origin/||' | grep / | cut -d/ -f1 | sort | uniq -c | sort -rn | head -5 | awk '{printf "%s/ (%s) ", $2, $1}')
   echo "- merged branch name prefixes (from merge subjects): ${mpre:-none}"
-  ex=$(printf '%s\n' "$subj" | grep -iE 'trello ?#[0-9]+|[A-Z][A-Z0-9]+-[0-9]+|#[0-9]+' | head -2 | cut -c1-160 | sed 's/^/    /')
+  ex=$(printf '%s\n' "$subj" | grep -vE '^Merge pull request' | grep -E '[Tt]rello ?#[0-9]+|(^|[^A-Za-z0-9])[A-Z][A-Z0-9]{1,9}-[0-9]+|#[0-9]+' | head -2 | cut -c1-160 | sed 's/^/    /')
   [ -n "$ex" ] && { echo "- examples:"; echo "$ex"; }
-else echo "- not a git repository"; fi
+else
+  echo "- not a git repository: no branch, no commit, no history (see \"Not a git repository\" in the generation rules)"
+  sec "Tickets"
+  echo "- no git history to read ticket codes from"
+fi
 exit 0

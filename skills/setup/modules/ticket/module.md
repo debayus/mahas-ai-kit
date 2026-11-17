@@ -15,8 +15,9 @@ Decides which tracker holds the work items and how ticket codes appear in branch
 
 Apply the first rule that matches and quote its evidence line in the question:
 
-1. A tracker server is listed in `.mcp.json` → that tracker.
-2. Ticket codes appear in at least 5 of the last 200 commit subjects → the tracker their shape points to: `Trello #123` → `trello`; `ABC-123` → `jira`; a bare `#123` with a GitHub remote → `github`. Two shapes pass → the more frequent one.
+0. Not a git repository → `none`. Do not ask.
+1. A tracker server is listed in `.mcp.json`, or the scan's "tracker links in commit bodies" line shows at least 3 links to one tracker → that tracker.
+2. Ticket codes appear in at least 5 of the last 200 commit subjects → the tracker their shape points to: `Trello #123` → `trello`; `ABC-123` → `jira`; a bare `#123` with a GitHub remote → `github`. Two shapes pass → the more frequent one. A key that the repo's own docs define (decision ids such as `DEC-12`, requirement ids) is not a ticket code: check the docs for the key before counting it.
 3. Otherwise → `none`. Still ask, with `none` first.
 
 ## Question

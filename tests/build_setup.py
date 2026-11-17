@@ -7,6 +7,7 @@ Usage: build_setup.py <kit root> <destination> [options]
                              firebase, sql, golden, e2e, load, coverage)
   --modules a,b              module templates to add (git-flow, ticket, testing, database)
   --no-format                leave out the format hook (a repo without a formatter)
+  --no-pipeline              knowledge layer only: no agents, process skills, commands, workflow
 
 The result is checked by verify.sh in tests/run.sh. It proves that the templates
 resolve to a setup that passes, for each combination of choices.
@@ -72,6 +73,7 @@ def main():
     p.add_argument('--options', default='')
     p.add_argument('--modules', default='')
     p.add_argument('--no-format', action='store_true')
+    p.add_argument('--no-pipeline', action='store_true')
     a = p.parse_args()
     keep = set(filter(None, a.options.split(',')))
     keep.add(a.tier)  # core templates key some blocks by tier
@@ -93,6 +95,8 @@ def main():
         for fn in listing(os.path.join(core, kind)):
             name = fn[:-3]
             if lite and name not in LITE[kind]:
+                continue
+            if a.no_pipeline and name != 'stack-skill':
                 continue
             take(core, kind, name)
     for mod in sorted(modules):
@@ -120,7 +124,7 @@ def main():
     files['.claude/.agent/testing.md'] = '# Testing\n\n## Test levels\n\nstub\n'
     files['.claude/README.md'] = fill(open(os.path.join(core, 'docs', 'claude-README.md')).read())
     files['README.md'] = '# Mock\n'
-    if not lite:
+    if not lite and not a.no_pipeline:
         wf = os.path.join(core, 'workflows', 'engineer-pipeline.js')
         files['.claude/workflows/engineer-pipeline.js'] = fill(open(wf).read())
 

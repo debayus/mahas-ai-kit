@@ -13,6 +13,7 @@ case "$f" in
   *.ts|*.tsx|*.js|*.jsx|*.css|*.scss|*.vue)
     [ -x "$root/node_modules/.bin/prettier" ] && "$root/node_modules/.bin/prettier" --write "$f" >/dev/null 2>&1 ;;
   *.py) if has ruff; then ruff format "$f" >/dev/null 2>&1; elif has black; then black -q "$f" >/dev/null 2>&1; fi ;;
+  *.gd) has gdformat && gdformat "$f" >/dev/null 2>&1 ;;
   *.go) has gofmt && gofmt -w "$f" >/dev/null 2>&1 ;;
   *.rs) has rustfmt && rustfmt "$f" >/dev/null 2>&1 ;;
 esac

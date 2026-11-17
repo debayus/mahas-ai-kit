@@ -16,6 +16,7 @@ Decides how finished work reaches the default branch. In tier lite this module i
 
 Apply the first rule that matches and quote its evidence line in the question:
 
+0. Not a git repository → not asked, not recorded.
 1. At least 3 `Merge pull request #N` commits in the last 200, or a pull request template exists → `pr`. Subjects ending in `(#N)` count as pull requests only when the Tickets section shows no ticket codes; otherwise they are ticket numbers.
 2. At least 3 local branch merges in the last 200, or prefixed branches exist, live or in the merged branch names (for example `fix/`, `feat/`) → `branch`. What the history shows wins over what the team size suggests.
 3. More than one human author, and the remote host has a PR CLI installed → `pr`.

@@ -39,6 +39,7 @@ Keep the block of the chosen option, delete the other blocks, and delete every m
 
 | Module | Decides |
 |---|---|
+| [pipeline](pipeline/module.md) | Whether the kit generates its own pipeline, or only the knowledge about the repository |
 | [git-flow](git-flow/module.md) | How finished work reaches the default branch: direct, branch, or pull request |
 | [ticket](ticket/module.md) | Which tracker holds the work items, and how ticket codes appear in branches and commits |
 | [database](database/module.md) | How Claude may work with the server-side database: from files only, or also reading a live one; protects applied migrations |

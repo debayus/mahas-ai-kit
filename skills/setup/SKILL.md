@@ -1,7 +1,7 @@
 ---
 name: setup
 description: Analyzes the current repository, then generates a complete but lean Claude configuration tailored to the code — CLAUDE.md, deep docs, stack skills, the Planner→Architect→Developer→Tester→Reviewer pipeline, commands, and hooks. Use when the user says "set up this project", "set up Claude for this repo", "install the kit", "prepare the pipeline", "/setup", or starts work in a repo that has no .claude/ folder. Also handles "update the setup" (update mode).
-argument-hint: "[--lite | --full] [--update] [--add <module>] [--dry-run]"
+argument-hint: "[--lite | --full] [--no-pipeline] [--update] [--add <module>] [--dry-run]"
 ---
 
 # Project setup
@@ -34,6 +34,7 @@ Follow `references/analysis.md`. Read only what it lists for the detected stack,
 - No analyze or test command defined by the repo: use the toolchain's own check if the config for it exists (`tsc --noEmit` with a `tsconfig.json`, `go vet`, `cargo check`) and say it was inferred. Do not run a build that writes output as a baseline; record it as unverified.
 - A test suite that would run longer than about 5 minutes, or that needs a device, a browser, or a server: run one small test file to prove the command works, and record the full suite as "not run during setup".
 - Dependencies not installed: do not install them. Record the commands as unverified.
+- A gate that exits 0 is not a pass if its output shows skipped steps (a missing engine binary, a missing tool). Read the output and record what was skipped.
 
 ## Step 3 — Choose the tier and show the plan
 
@@ -64,7 +65,7 @@ Order:
 1. `.claude/.agent/` deep docs (see generation rules for which files).
 2. `CLAUDE.md` from `templates/docs/CLAUDE.md`.
 3. Stack skills (`.claude/skills/stack-*/SKILL.md`) shaped like `templates/skills/stack-skill.md`.
-4. Process skills, agents, commands, and the workflow — only those in the chosen tier, plus the operations pieces the user accepted. A skill template `templates/skills/<name>.md` is written to `.claude/skills/<name>/SKILL.md`. Blocks marked `<!-- option: lite -->` or `<!-- option: standard full -->` are resolved by tier.
+4. Process skills, agents, commands, and the workflow — only those in the chosen tier, and none of them when the `pipeline` module is `none` — plus the operations pieces the user accepted. A skill template `templates/skills/<name>.md` is written to `.claude/skills/<name>/SKILL.md`. Blocks marked `<!-- option: lite -->` or `<!-- option: standard full -->` are resolved by tier.
 5. Module files for the options the user chose, from `modules/<name>/templates/`, resolving option blocks as `modules/README.md` describes. A module set to `none`: delete the lines in generated commands that refer to its skill.
 6. Hooks: copy the scripts to `.claude/hooks/`, make them executable, remove formatter branches for languages the repo does not use, and merge `templates/hooks/settings-hooks.json` into `.claude/settings.json` (merge, do not replace). No formatter in the repo: leave out `format-on-edit.sh` and its `PostToolUse` entry. Nothing to protect: leave out `protect-files.sh`, its list, and its `PreToolUse` entry.
 7. Tooling changes the user approved. For stricter analyzer or linter settings: apply, re-run the analyzer, and compare with the baseline. If new findings appear, report the count and ask whether to keep, fix, or revert — do not silently leave the project failing.
@@ -74,7 +75,7 @@ Order:
 
 Run `bash <skill folder>/scripts/verify.sh` from the target repository root and fix everything it flags. Then confirm by hand that each command written in CLAUDE.md ran successfully in this session.
 
-Report to the user: tier chosen, files created, what was skipped and why, tooling changes and their result, anything you could not verify, and how to start (`/plan <request>`; outside tier lite also `/pipeline <request>`). Do not commit; offer a commit message.
+Report to the user: tier chosen, files created, what was skipped and why, tooling changes and their result, anything you could not verify, and how to start (`/plan <request>`; outside tier lite also `/pipeline <request>`; with the pipeline off, name the stack skills instead). Do not commit; offer a commit message.
 
 ## Step 6 — Update mode
 
@@ -85,7 +86,8 @@ For a repo that already has a setup. Run Steps 1–2, then `bash <skill folder>/
 **Setup without a kit record (made by hand or by an older kit) — adopt it, do not replace it.**
 
 1. Map what exists by what it does, not by its name. A command that runs plan → design → code → test → review is the pipeline whatever it is called (`/engineer`, `/ship`, `/feature`); an agent that runs the gate and fixes failures is the tester (`test-fixer`, `test-runner`); a skill holding commit rules is git delivery (`git-delivery`, `commit-prep`). Show the user this mapping.
-2. Keep existing names and files. Never rename, merge, or delete them, and never add a kit piece that duplicates one that already does the job.
+2. Keep existing names, files, and conventions: a project that keeps its commands as skills, or its deep docs under `docs/`, gets new pieces in that same form.
+   Keep existing names and files. Never rename, merge, or delete them, and never add a kit piece that duplicates one that already does the job.
 3. Propose only what is missing after the mapping: hooks, deep docs, a noise-rule section for the reviewer, a core command nothing existing covers (`/review-changes`, a gate-only `/test`), and each module or operations piece whose evidence is there and that nothing existing covers. Use the module's own recommendation rules. The "Follow all recommendations" question lists only these additions, never a piece that is already covered.
    - Partly covered (an existing skill does half of what the kit's piece does): do not add the kit's file beside it. Offer to add the missing sections to the existing file, as a diff, or leave it. If that would push the file over its size limit, or the covering text sits inside a command or a deep doc instead of a skill, offer the kit's file plus a one-line pointer that replaces the inline text, and show both diffs.
    - Two existing pieces share one kit role (a gate agent and a full-suite agent): keep both and map both.

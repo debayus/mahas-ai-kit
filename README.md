@@ -29,6 +29,7 @@ Then in each project:
 /mahas-ai-kit:setup            # analyze, show the plan, wait for approval, then generate
 /mahas-ai-kit:setup --dry-run  # analysis and plan only
 /mahas-ai-kit:setup --lite     # force the light version
+/mahas-ai-kit:setup --no-pipeline  # knowledge about the repo only; keep your own way of working
 /mahas-ai-kit:setup --add ticket  # add one module to an existing setup
 /mahas-ai-kit:setup --update   # check an existing setup against the current code; adopts a hand-made setup without renaming it
 ```
@@ -39,6 +40,7 @@ Setup recommends an answer for each choice from what it finds in the repo. Accep
 
 | Choice | Options | Recommended from |
 |---|---|---|
+| Pipeline | the kit's pipeline, or knowledge only | A workflow framework already in use (Superpowers, Spec Kit, BMAD, OpenSpec) |
 | Git flow | direct, branch, pull request | Branch names, PR merges in the history, the PR CLI installed |
 | Tickets | Trello, Jira, GitHub Issues, none | Servers in `.mcp.json`, ticket codes in commit subjects |
 | Database | none, files only, read a live database | Migration and rules files, servers in `.mcp.json`, database CLIs |
@@ -46,6 +48,69 @@ Setup recommends an answer for each choice from what it finds in the repo. Accep
 | Operations | Play Store deploy, App Store deploy, crash triage | Release signing, bundle id, crash SDK |
 
 Jira, GitHub Issues, extended test levels, SQL databases other than Supabase and Firebase, and pull requests on hosts other than GitHub are experimental: written, not yet run on a real project. The kit never installs an MCP server and never writes a token.
+
+## What a run looks like
+
+`--dry-run` prints the plan and stops. A shortened example for a small web app (illustrative, not a real project):
+
+```
+Found: React 19 + Vite + TypeScript, data in Firestore, 19 source files, no tests.
+       CI deploys to hosting on every push to main.
+Tier:  lite (under 40 source files, no tests)
+
+Hard rules, each with the file that proves it
+  1. A push to main goes live              .github/workflows/deploy.yml
+  2. All data access goes through one file  src/services/dataService.ts
+  3. UI text lives in one place, two languages  src/context/LanguageContext.tsx
+
+Will create
+  CLAUDE.md, .claude/.agent/{README,overview,conventions}.md
+  .claude/skills/stack-react-firebase, process-planning, process-code-review
+  .claude/agents/{planner,reviewer}.md, .claude/commands/{plan,review-changes}.md
+  .claude/hooks/protect-files.sh   (protects .env and the lockfile)
+
+Left out, and why
+  architect, developer, tester, /pipeline, /test   tier lite
+  format hook                                      no formatter in the repo
+  deploy and crash pieces                          no mobile app, no crash SDK
+
+Choices (recommended)
+  tickets   none   no ticket codes in the last 200 commit subjects
+  testing   none   no test files found
+  database  none   Firestore is used in 2 files, but no rules file is in the repo
+
+Checked: `npx tsc --noEmit` passes (9 s). Not run: `npm run build` (writes output).
+```
+
+After generating, `verify.sh` checks the result and setup fixes what it flags before reporting:
+
+```
+ok:   CLAUDE.md (31 lines)
+ok:   4 hot rules
+ok:   no leftover placeholders
+ok:   protect-files.sh wired in settings.json
+ok:   all relative links resolve
+RESULT: PASS
+```
+
+## Already using Superpowers, Spec Kit, or BMAD?
+
+Those tell Claude how to work; they are the same in every project. This kit writes down what is true about one repository: its layers, its hard rules, the commands that run, the files that must not be edited. Use `--no-pipeline` to get that part only (`CLAUDE.md`, the deep docs, the stack skills, the hooks) and keep the workflow you have. Setup recommends this on its own when it finds such a framework.
+
+## What it has been tried on
+
+The kit is young. This is what has actually been run, so you can judge how far to trust it on your stack.
+
+| Stack | Scan | Dry-run of the full setup |
+|---|---|---|
+| Flutter with Supabase and Firebase | yes | yes, including adoption of a hand-made setup |
+| React + Vite + TypeScript with Firestore | yes | yes |
+| Node.js + TypeScript tool (MCP server), no git repository | yes | yes |
+| Godot 4 (GDScript) with Python tooling | yes | yes, adoption |
+| Astro static site | yes | no |
+| Next.js, Django, FastAPI, Go, Rust, .NET | fixtures only, or not at all | no |
+
+A dry-run follows every step up to the plan and checks it against `verify.sh`; it stops before writing files. Each of these runs turned up defects. The ones that could be reproduced are fixed and covered by `tests/run.sh`. Expect more on a stack that is not listed: start with `--dry-run`, and please report what looks wrong.
 
 ## After setup
 
@@ -91,7 +156,7 @@ Generated only when the code shows the evidence, and only after you accept each 
 
 ## What it never does
 
-It does not overwrite existing files, commit, copy secret values, or change analyzer settings without approval.
+It does not overwrite existing files, commit, copy secret values, change analyzer settings without approval, install an MCP server, or add a dependency.
 
 ## Working on the kit
 

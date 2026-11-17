@@ -21,6 +21,9 @@ limit() { # file max
 
 if [ -f CLAUDE.md ]; then limit CLAUDE.md 40; else bad "CLAUDE.md missing"; fi
 [ -d .claude ] || { bad ".claude/ missing"; exit 1; }
+# Only the folders a setup consists of. Other things under .claude/ (worktrees, run logs,
+# memory) belong to the tools that wrote them.
+SCOPE="CLAUDE.md .claude/README.md .claude/kit.json .claude/settings.json .claude/agents .claude/commands .claude/skills .claude/.agent .claude/hooks .claude/workflows"
 
 # 0. hot rules: at most 6, each with a link to the file that proves it
 if [ -f CLAUDE.md ]; then
@@ -32,7 +35,7 @@ if [ -f CLAUDE.md ]; then
 fi
 
 # 1. no leftover placeholders
-left=$(grep -rnE '\{\{[A-Z_]+\}\}' CLAUDE.md .claude --exclude-dir=worktrees --include='*.md' --include='*.js' --include='*.json' --include='*.sh' 2>/dev/null)
+left=$(grep -rnE '\{\{[A-Z_]+\}\}' $SCOPE --exclude='._*' --include='*.md' --include='*.js' --include='*.json' --include='*.sh' 2>/dev/null)
 [ -z "$left" ] && ok "no leftover placeholders" || { bad "leftover placeholders:"; echo "$left" | head -20; }
 
 # 2. frontmatter + size limits
@@ -57,7 +60,7 @@ n=$(ls -d .claude/skills/stack-* 2>/dev/null | wc -l | tr -d ' ')
 if [ -f .claude/kit.json ] && grep -qE '"kit": *"[0-9]+\.[0-9]+\.[0-9]+"' .claude/kit.json; then ok "kit record present"
 elif [ "$EXISTING" -eq 1 ]; then warn "no .claude/kit.json — adopt this setup (SKILL.md Step 6)"
 else bad ".claude/kit.json missing or has no \"kit\" version"; fi
-mark=$(grep -rnE '<!-- /?option' CLAUDE.md .claude --exclude-dir=worktrees --include='*.md' 2>/dev/null)
+mark=$(grep -rnE '<!-- /?option' $SCOPE --exclude='._*' --include='*.md' 2>/dev/null)
 [ -z "$mark" ] && ok "no leftover option markers" || { bad "leftover option markers:"; echo "$mark" | head -10; }
 ns=$(ls -d .claude/skills/*/ 2>/dev/null | wc -l | tr -d ' ')
 if [ "$ns" -le 10 ]; then ok "$ns skills in total"
@@ -95,7 +98,7 @@ while IFS= read -r f; do
     # agents and commands are prompts read from the repo root, so a root-relative link is valid too
     [ -e "$base/$link" ] || [ -e "$link" ] || { bad "$f → broken link: $link"; broken=1; }
   done
-done < <(find CLAUDE.md .claude -name '*.md' -not -path '*/worktrees/*' 2>/dev/null)
+done < <(find $SCOPE -name '*.md' ! -name '._*' 2>/dev/null)
 [ "$broken" -eq 0 ] && ok "all relative links resolve"
 
 # 7. agents only reference skills that exist
@@ -112,7 +115,7 @@ for c in $(grep -rhoE '(^|[ (])`/[a-z][a-z0-9-]*[ `]' CLAUDE.md .claude/agents .
   [ -f ".claude/commands/$c.md" ] || [ -d ".claude/skills/$c" ] || soft "command '/$c' is named but .claude/commands/$c.md does not exist"
 done
 for a in $(grep -rhoE '`[a-z][a-z0-9-]+` agent' .claude/agents .claude/commands .claude/skills 2>/dev/null | sed -E 's/`([^`]+)`.*/\1/' | sort -u); do
-  [ -f ".claude/agents/$a.md" ] || soft "agent '$a' is named but .claude/agents/$a.md does not exist"
+  [ -f ".claude/agents/$a.md" ] || [ -d ".claude/$a" ] || soft "agent '$a' is named but .claude/agents/$a.md does not exist"
 done
 
 # 7c. MCP tools that are named: is their server in .mcp.json? A server may also be connected
@@ -123,7 +126,7 @@ for m in $(grep -rhoE 'mcp__[A-Za-z0-9-]+__' .claude/agents .claude/commands .cl
 done
 
 # 8. no secret-looking values
-sec=$(grep -rnIE '(sk_live_|sk-[A-Za-z0-9]{20,}|AIza[0-9A-Za-z_-]{30,}|eyJ[A-Za-z0-9_-]{20,}\.eyJ|-----BEGIN [A-Z ]*PRIVATE KEY)' CLAUDE.md .claude --exclude-dir=worktrees 2>/dev/null)
+sec=$(grep -rnIE '(sk_live_|sk-[A-Za-z0-9]{20,}|AIza[0-9A-Za-z_-]{30,}|eyJ[A-Za-z0-9_-]{20,}\.eyJ|-----BEGIN [A-Z ]*PRIVATE KEY)' $SCOPE --exclude='._*' 2>/dev/null)
 [ -z "$sec" ] && ok "no secret-looking values" || { bad "possible secrets in generated files:"; echo "$sec" | cut -c1-120; }
 
 [ "$warns" -gt 0 ] && echo "$warns warning(s)"

@@ -42,8 +42,9 @@ build db-firebase-files   --modules git-flow,database --options branch,firebase
 build db-sql-files        --modules database --options sql
 build protect-only        --modules git-flow --options branch --no-format
 build lite                --tier lite
+build knowledge-only      --no-pipeline --modules ticket,database --options supabase
 build everything          --modules git-flow,ticket,testing,database --options pr,golden,e2e,load,coverage,supabase,firebase,read
-for s in standard-direct standard-branch standard-pr-ticket testing-existing testing-extended db-supabase-read db-firebase-files db-sql-files protect-only lite everything; do
+for s in standard-direct standard-branch standard-pr-ticket testing-existing testing-extended db-supabase-read db-firebase-files db-sql-files protect-only lite knowledge-only everything; do
   expect_pass "$s"
 done
 
@@ -121,6 +122,10 @@ blocked "protected file at the root" "$H/pubspec.lock"
 allowed "a migration from another year" "$H/supabase/migrations/20260101000000_new.sql"
 allowed "ordinary source file" "$H/lib/main.dart"
 allowed "new file in a folder that does not exist yet" "$H/lib/new/deep/file.dart"
+# Without git, and reached through a symlink: the path is spelled differently from the root.
+N="$TMP/hook-nogit"; mkdir -p "$N/.claude/hooks" && cp "$KIT"/skills/setup/templates/hooks/*.sh "$N/.claude/hooks/" && echo '.env' > "$N/.claude/hooks/protected-paths.txt" && ln -s "$N" "$TMP/hook-link"
+r=$(printf '{"tool_input":{"file_path":"%s"}}' "$TMP/hook-link/.env" | CLAUDE_PROJECT_DIR="$N" bash "$N/.claude/hooks/protect-files.sh" 2>/dev/null; echo $?)
+[ "$r" = 2 ] && yes "blocked: protected file reached through a symlink, no git" || no "should be blocked: protected file reached through a symlink, no git"
 
 # --- detect.sh on small repositories ---------------------------------------------------
 
@@ -186,7 +191,51 @@ hasnt "a library named only in a comment is not listed" "drift"
 has "supabase migrations are found" "supabase migrations: ./supabase/migrations/ (1 files" "supabase"
 has "a .claude folder without agents, skills, or commands is a fresh setup" "treat as a fresh setup" "claude"
 has "a tracked .env is flagged" "TRACKED IN GIT" "env"
-has "\"whenever\" and \"perpanjangan\" are not invariant markers" "- 0 lines; list them" "lines; list"
+has "\"whenever\" and \"perpanjangan\" are not invariant markers" "- 0 lines (text" "lines"
+
+echo "## detect.sh: ticket evidence and folders without git"
+repo r-tickets
+commit "feat: start"
+for i in 1 2 3 4 5; do git commit -q --allow-empty -m "docs(DEC-$i): record a decision" -m "Refs: https://trello.com/c/abc$i/1-card"; done
+commit "Merge pull request #7 from someone/feat/new-thing"
+OUT=$(scan)
+has "tracker links in commit bodies are counted" "tracker links in commit bodies: trello.com 5" "tracker links"
+has "a KEY code comes with the warning about ids defined in docs" "is not a ticket)" "KEY-123"
+has "branch prefixes are read from PR merges too" "merged branch name prefixes (from merge subjects): feat/ (1)" "prefixes"
+mkdir -p "$TMP/r-nogit/src" && cd "$TMP/r-nogit"
+printf '{\n  "name": "tool",\n  "dependencies": { "@modelcontextprotocol/sdk": "^1.0.0" }\n}\n' > package.json
+echo 'export {}' > src/index.mjs; echo 'junk' > src/._index.mjs; echo '.env' > .gitignore
+OUT=$(GIT_CEILING_DIRECTORIES="$TMP" scan); code=$?
+[ "$code" -eq 0 ] && yes "a folder without git scans with exit status 0" || no "a folder without git scans with exit status 0"
+has "a folder without git is named as such" "not a git repository: no branch, no commit, no history" "git"
+has "the Tickets section still exists without git" "no git history to read ticket codes from" "ticket"
+hasnt "nothing is claimed about .gitignore without git" ".env ignored by git"
+has ".mjs is source and macOS metadata files are not" "- source files: 1" "source files"
+
+echo "## detect.sh: other stacks"
+repo r-godot
+printf 'config/name="Mock"\nconfig/features=PackedStringArray("4.7")\n' > project.godot
+mkdir -p scripts tests/unit tests/integration addons/gut .specify
+echo 'extends Node' > scripts/player.gd
+echo 'extends Node' > addons/gut/plugin.gd
+echo 'extends GutTest' > tests/unit/test_player.gd
+echo 'extends GutTest' > tests/integration/test_save.gd
+git add -A && commit "feat: game"
+OUT=$(scan)
+has "a Godot project is recognised by its manifest" "- project.godot" "godot"
+has "GDScript counts as source, addons excluded" "- source files: 1" "source files"
+has "GDScript tests are counted by level" "- unit and component: 1 test files (by extension: gd 1" "unit and"
+has "a workflow framework folder is reported" "workflow framework folders: .specify/" "workflow"
+repo r-astro
+mkdir -p site/src/pages site/.astro
+printf '{\n  "name": "site",\n  "dependencies": {\n    "astro": "^6.0.0"\n  }\n}\n' > site/package.json
+echo '<h1>x</h1>' > site/src/pages/index.astro
+echo 'export {}' > site/.astro/content.d.ts
+git add -A && commit "feat: site"
+OUT=$(scan)
+has "the app root is found in a subfolder" "primary app root: site/" "app root"
+has "Astro is listed as a dependency of interest" '"astro": "^6.0.0"' "astro"
+has ".astro pages count as source, generated .astro/ does not" "- source files: 1" "source files"
 
 echo "## detect.sh: empty repository and Firestore in code"
 repo r-web

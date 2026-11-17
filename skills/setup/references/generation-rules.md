@@ -8,11 +8,23 @@
 | **standard** | 40–300 source files with tests | lite + `architecture.md`, `testing.md`, `glossary.md` if needed, up to 3 stack skills, all 5 agents, `process-planning`, `process-tech-design`, `/pipeline`, `/plan`, `/test`, workflow, both hooks |
 | **full** | Over ~300 source files, or persistent data with migrations/sync, or multiple roles/tenants | standard + `data-model.md`, a data stack skill, `workflows.md` (release/ops runbooks found in the repo) |
 
-Size and tests decide the tier first: a small repo or one without tests is lite even if it has shared data or several roles. Then add single pieces from a higher tier when the code clearly needs them (a data section, a second stack skill), and drop a piece that does not apply. State each such decision in the plan.
+Size and tests decide the tier first: a small repo or one without tests is lite even if it has shared data or several roles. Then add single pieces from a higher tier when the code clearly needs them (a data section, a second stack skill), and drop a piece that does not apply. State each such decision in the plan. Data saved on the device with a version number and migration functions (a save file format, a local database schema) counts as persistent data with migrations.
 
 A repo without tests: in the copied process skills, drop the sentences that require tests ("Include test tasks", "tests green") and name the gates that do exist instead. Tier lite has no pipeline: drop the sentences that refer to one.
 
+## Not a git repository
+
+The scan says so in its Git section. Then:
+
+- `/review-changes` is not generated: it reads a diff. The reviewer agent reviews the files it is given.
+- Delete every sentence that names a branch, a diff, a commit, or a push; `{{DEFAULT_BRANCH}}` has no value.
+- `{{COMMIT}}` is written as "no git" and `kit.json` gets `"commit": null`.
+- The `git-flow` and `ticket` modules are not asked; record neither.
+- Say in the plan that `git init` and a rerun with `--update` add these parts.
+
 ## Deep docs
+
+A project that already keeps this knowledge elsewhere (a `docs/` folder with architecture, schema, or glossary files) keeps it there: link to those files from the index and from the skills, and do not copy them into `.claude/.agent/`.
 
 No template: each doc is written from what Step 2 found, one section per item below, every section with a link to the file that proves it. Leave out an item the code does not show.
 
@@ -101,7 +113,7 @@ Stack skills: at most 3 (4 in full tier). A skill exists only if at least two ag
 
 ## Modules (the user chooses)
 
-Optional parts live in `modules/`; read `modules/README.md` for the format. Each module asks one question with a recommended answer taken from the scan. Current modules: `git-flow` (direct, branch, or pull request), `ticket` (Trello, Jira, GitHub Issues, or none), `testing` (gate only, gaps in existing levels, or extended levels), and `database` (files only, or also read-only inspection of a live database). Tier lite skips `git-flow` unless the user asks for it.
+Optional parts live in `modules/`; read `modules/README.md` for the format. Each module asks one question with a recommended answer taken from the scan. Current modules: `pipeline` (the kit's pipeline, or the knowledge layer only), `git-flow` (direct, branch, or pull request), `ticket` (Trello, Jira, GitHub Issues, or none), `testing` (gate only, gaps in existing levels, or extended levels), and `database` (files only, or also read-only inspection of a live database). Tier lite skips `git-flow` unless the user asks for it.
 
 A module agent counts as an operations agent for the size limit (80 lines).
 
@@ -118,19 +130,19 @@ Write `.claude/kit.json` last. It is the only record of what the kit generated; 
   "commit": "<short sha>",
   "tier": "lite | standard | full",
   "appDir": ".",
-  "modules": { "git-flow": "branch", "ticket": "trello", "testing": "existing", "database": "files" },
+  "modules": { "pipeline": "kit", "git-flow": "branch", "ticket": "trello", "testing": "existing", "database": "files" },
   "ops": ["playstore-deploy", "appstore-deploy", "crash"],
   "adopted": { "crash": ".claude/agents/crash-analyzer.md", "ticket": ".claude/skills/process-ticket-offer" }
 }
 ```
 
-`adopted` appears only for a setup the kit did not generate (update mode): it maps a kit role, module, or operations piece to the existing file that already does the job, so later runs do not offer it again. Keys: an agent role (`planner`, `architect`, `developer`, `tester`, `reviewer`), a command (`pipeline`, `plan`, `test`, `review-changes`), `workflow`, a module name, or an operations piece name. The value is one path, or a list of paths when two files share the role. An adopted module is also recorded under `modules` with the option that describes what the existing file does, and an adopted operations piece is also listed in `ops`; declining an extension to it does not change that. For such a setup, `tier` is the tier the scan suggests and `kit` is the version of the kit that wrote the record.
+`adopted` appears only for a setup the kit did not generate (update mode): it maps a kit role, module, or operations piece to the existing file that already does the job, so later runs do not offer it again. Keys: an agent role (`planner`, `architect`, `developer`, `tester`, `reviewer`), a command (`pipeline`, `plan`, `test`, `review-changes`), `workflow`, `docs`, `stack-skills`, `format-hook`, `protect-hook`, a module name, or an operations piece name. The value is one path, or a list of paths when two files share the role. An adopted module is also recorded under `modules` with the option that describes what the existing file does, and an adopted operations piece is also listed in `ops`; declining an extension to it does not change that. For such a setup, `tier` is the tier the scan suggests and `kit` is the version of the kit that wrote the record.
 
 A module the user declined is recorded as `"none"`, so update mode does not offer it again unasked.
 
 ## Tooling proposals (offer, never force)
 
-- **Formatter hook** — when the repo itself has a formatter: one that ships with the toolchain (`dart format`, `gofmt`, `cargo fmt`) or one listed in the manifest (Prettier, Ruff, Black). No formatter in the repo → no hook; do not add a formatter dependency.
+- **Formatter hook** — when the repo itself has a formatter: one that ships with the toolchain (`dart format`, `gofmt`, `cargo fmt`) or one listed in the manifest (Prettier, Ruff, Black, gdformat from gdtoolkit). The hook's Python branch uses whichever of Ruff or Black is on the machine: keep it only if the repo's manifest names one of them. No formatter in the repo → no hook; do not add a formatter dependency.
 - **Protected paths hook** — when the repo has files that must not be hand-edited: applied migration files, generated code, lockfiles, secret files. List them in `.claude/hooks/protected-paths.txt`.
 - **Stricter static analysis** — Dart: `strict-casts`, `strict-inference`, `strict-raw-types`, lint `unawaited_futures`. TypeScript: `strict`, `noUncheckedIndexedAccess`. Python: enable the type checker already in the repo. Measure new findings before and after; report the count. With `--dry-run`, or when measuring means editing a config file, offer the change as unmeasured instead. Do not recommend a setting that adds more than about 50 findings in one step; report the count and leave it to the user.
 - **Rules that became enforceable** — if a hot rule can be a lint or a hook, propose that and shorten the prose.

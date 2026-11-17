@@ -11,8 +11,10 @@ f="$(bash "$dir/_file-path.sh")"
 d="$(dirname "$f")"
 while [ ! -d "$d" ] && [ "$d" != / ] && [ "$d" != . ]; do d="$(dirname "$d")"; done
 root="$(cd "$d" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null)"
-[ -n "$root" ] && f="$(cd "$d" && pwd -P)${f#"$d"}" && root="$(cd "$root" && pwd -P)"
 [ -n "$root" ] || root="${CLAUDE_PROJECT_DIR:-$(pwd)}"
+# Compare physical paths, so /tmp and /private/tmp (or any symlink) spell the same file.
+[ -d "$d" ] && f="$(cd "$d" && pwd -P)${f#"$d"}"
+[ -d "$root" ] && root="$(cd "$root" && pwd -P)"
 rel="${f#"$root"/}"
 while IFS= read -r pat || [ -n "$pat" ]; do
   pat="${pat%$'\r'}"
